@@ -50,6 +50,9 @@ public final class PartHbmFluidExportBus extends PartFluidExportBus {
         if (sinks.length == 0) {
             // Keep polling rather than sleeping: a SLEEP here can trap the device asleep
             // until an external wake (neighbour/redstone change), which HBM tanks never fire.
+            // Note this guards only the ticking path -- the sleep gate in isSleeping() reaches
+            // the same trap via getTarget(), which is why that override is structural-only.
+            // SLOWER is bounded by TickRates.ExportBus (max 60 ticks).
             diag.report(self, "no fluid sink tank at target "
                     + "(not an HBM machine/storage core, core unresolved, or storage tank not in receive/both mode)");
             return TickRateModulation.SLOWER;
@@ -133,10 +136,19 @@ public final class PartHbmFluidExportBus extends PartFluidExportBus {
     // so the base path yields a null/unstable adaptor and the device registers as permanently
     // asleep -> tickingRequest()/doBusWork() never fire. Override it to resolve the multiblock
     // core (matching doBusWork) so the wake/sleep gate is correct.
+    //
+    // Structural check only: "could this ever be a sink", not "does it have room right now".
+    // Returning the dynamic answer here would reintroduce the very trap doBusWork() avoids by
+    // returning SLOWER instead of SLEEP -- just through the other door. isSleeping() is
+    // consulted by updateState() (on neighbour, setting and upgrade changes) and by
+    // getTickingRequest(), and it calls sleepDevice() whenever it is true. A tank that is
+    // merely full, untyped or in the wrong mode at that instant would therefore still put this
+    // bus to sleep, and HBM never fires a neighbour update to wake it again. Live availability
+    // is re-checked on every tick in doBusWork(). See HbmFluidAccess for the full reasoning.
     @Override
     protected Object getTarget() {
         TileEntity target = getHbmTarget();
-        return HbmFluidAccess.hasSink(target) ? target : null;
+        return HbmFluidAccess.canEverSink(target) ? target : null;
     }
 
     private TileEntity getHbmTarget() {
