@@ -50,18 +50,6 @@ public final class ChemicalPlantDriver extends AbstractHbmMachineDriver {
     }
 
     @Override
-    public boolean hasContents(TileEntity tile) {
-        TileEntityMachineChemicalPlant machine = (TileEntityMachineChemicalPlant) tile;
-        // Fully-drained check for AE2 blocking mode: progress, any input/output
-        // slot item, or any fluid in the input OR output tanks.
-        return machine.chemplantModule.progress > 0D
-                || hasItems(machine, INPUT_SLOTS)
-                || hasItems(machine, OUTPUT_SLOTS)
-                || hasFluids(machine.inputTanks)
-                || hasFluids(machine.outputTanks);
-    }
-
-    @Override
     public boolean push(TileEntity tile, HbmRecipeMatch match, PatternStacks suppliedInputs) {
         TileEntityMachineChemicalPlant machine = (TileEntityMachineChemicalPlant) tile;
         GenericRecipe recipe = (GenericRecipe) match.getRecipe();

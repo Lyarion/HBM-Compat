@@ -50,18 +50,6 @@ public final class AssemblyMachineDriver extends AbstractHbmMachineDriver {
     }
 
     @Override
-    public boolean hasContents(TileEntity tile) {
-        TileEntityMachineAssemblyMachine machine = (TileEntityMachineAssemblyMachine) tile;
-        // Fully-drained check for AE2 blocking mode: progress, any input/output
-        // slot item, or any fluid in the input OR output tank.
-        return machine.assemblerModule.progress > 0D
-                || hasItems(machine, INPUT_SLOTS)
-                || hasItems(machine, OUTPUT_SLOTS)
-                || machine.inputTank.getFill() > 0
-                || machine.outputTank.getFill() > 0;
-    }
-
-    @Override
     public boolean push(TileEntity tile, HbmRecipeMatch match, PatternStacks suppliedInputs) {
         TileEntityMachineAssemblyMachine machine = (TileEntityMachineAssemblyMachine) tile;
         GenericRecipe recipe = (GenericRecipe) match.getRecipe();

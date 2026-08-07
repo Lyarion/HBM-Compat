@@ -51,17 +51,6 @@ public final class ArcWelderDriver extends AbstractHbmMachineDriver {
     }
 
     @Override
-    public boolean hasContents(TileEntity tile) {
-        TileEntityMachineArcWelder machine = (TileEntityMachineArcWelder) tile;
-        // Fully-drained check for AE2 blocking mode: any progress, any item in
-        // input OR output slots, or any fluid in the input tank.
-        return machine.progress > 0
-                || hasItems(machine, INPUT_SLOTS)
-                || hasItems(machine, OUTPUT_SLOTS)
-                || hasFluids(new FluidTank[] { machine.tank });
-    }
-
-    @Override
     public boolean push(TileEntity tile, HbmRecipeMatch match, PatternStacks suppliedInputs) {
         TileEntityMachineArcWelder machine = (TileEntityMachineArcWelder) tile;
         ArcWelderRecipe recipe = (ArcWelderRecipe) match.getRecipe();

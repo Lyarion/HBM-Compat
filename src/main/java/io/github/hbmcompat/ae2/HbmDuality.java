@@ -7,8 +7,6 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraftforge.common.util.ForgeDirection;
 
 import appeng.api.config.LockCraftingMode;
-import appeng.api.config.Settings;
-import appeng.api.config.YesNo;
 import appeng.api.implementations.ICraftingPatternItem;
 import appeng.api.networking.crafting.ICraftingPatternDetails;
 import appeng.helpers.DualityInterface;
@@ -27,26 +25,9 @@ public final class HbmDuality extends DualityInterface {
 
     private final IInterfaceHost host;
 
-    /**
-     * Hash of the last pattern successfully pushed, for SMART_BLOCK. Mirrors the
-     * parent's {@code lastInputHash}: under smart blocking a machine that still
-     * holds contents may accept a new job iff it is the SAME recipe as last time.
-     */
-    private int lastInputHash = 0;
-
     public HbmDuality(AENetworkProxy networkProxy, IInterfaceHost host) {
         super(networkProxy, host);
         this.host = host;
-    }
-
-    /** AE2 GUI toggle: Settings.BLOCK == YES. */
-    private boolean isBlocking() {
-        return getConfigManager().getSetting(Settings.BLOCK) == YesNo.YES;
-    }
-
-    /** AE2 GUI toggle: Settings.SMART_BLOCK == YES (only meaningful with BLOCK on). */
-    private boolean isSmartBlocking() {
-        return getConfigManager().getSetting(Settings.SMART_BLOCK) == YesNo.YES;
     }
 
     @Override
@@ -85,10 +66,6 @@ public final class HbmDuality extends DualityInterface {
             return false;
         }
 
-        boolean blocking = isBlocking();
-        boolean smartBlocking = blocking && isSmartBlocking();
-        boolean sameRecipeAsLast = smartBlocking && lastInputHash == patternDetails.hashCode();
-
         // pushPattern runs at craft-tick rate, so none of the reason strings below are built unless
         // the debug flag is on.
         final boolean diagnose = AdapterDiagnostics.enabled();
@@ -111,20 +88,6 @@ public final class HbmDuality extends DualityInterface {
                 if (diagnose) {
                     rejection = "machine on the " + direction + " side is busy: it is mid-cycle, or its input"
                             + " slots still hold un-consumed items";
-                }
-                continue;
-            }
-
-            // AE2 blocking mode: refuse a new job while the machine still holds anything
-            // (input/output slots, tanks, or active progress). Smart blocking makes one
-            // exception — the SAME recipe as last time may be re-pushed once its inputs
-            // are consumed, so identical batches can pipeline without waiting for the
-            // output to be fully drained.
-            if (blocking && !sameRecipeAsLast && driver.hasContents(target)) {
-                if (diagnose) {
-                    rejection = "blocking mode is on and the machine on the " + direction + " side is not fully"
-                            + " drained (progress, an input/output slot, or a tank still holds something)."
-                            + " Pull the outputs away, or turn blocking off in this adapter's GUI.";
                 }
                 continue;
             }
@@ -152,9 +115,6 @@ public final class HbmDuality extends DualityInterface {
             }
             if (driver.push(target, match, suppliedInputs)) {
                 HbmPatternMetadata.write(encodedPattern, match);
-                if (smartBlocking) {
-                    lastInputHash = patternDetails.hashCode();
-                }
                 resetCraftingLock();
                 AdapterDiagnostics.reset(getTile());
                 try {
@@ -196,32 +156,24 @@ public final class HbmDuality extends DualityInterface {
         // busy state instead of delegating to super.isBusy(): the parent's blocking
         // scan builds an InventoryAdaptor against the *immediate* neighbour tile,
         // which for a BlockDummyable multiblock is often a dummy segment -> the scan
-        // is unreliable and would wedge the adapter busy forever under BLOCK=YES.
+        // is unreliable and would wedge the adapter busy forever.
         if (getCraftingLockedReason() != LockCraftingMode.NONE || hasItemsToSend()) {
             return true;
         }
 
-        boolean blocking = isBlocking();
-        // Under smart blocking, "busy" cannot be decided globally here: a machine
-        // that still holds contents may yet accept the SAME recipe. Defer the real
-        // decision to pushPattern (mirrors the parent, which returns false here).
-        boolean smartBlocking = blocking && isSmartBlocking();
-
-        // Not busy iff at least one target can take a job right now. In plain
-        // blocking mode "can take a job" means fully drained (hasContents == false);
-        // otherwise it means the machine is not mid-cycle / inputs not pending
-        // (driver.isBusy == false).
+        // Not busy iff at least one target can take a job right now, i.e. it is not
+        // mid-cycle and its inputs are not still pending. Output backlog is
+        // deliberately NOT considered: this adapter never pulls outputs back (external
+        // buses/pipes do), so gating on a drained output would wedge the adapter busy
+        // forever. AE2's BLOCK/SMART_BLOCK settings are intentionally not honoured here
+        // for the same reason -- see HbmBlockingButtonHider for the GUI side.
         for (ForgeDirection direction : host.getTargets()) {
             TileEntity target = target(direction);
             IHbmMachineDriver driver = HbmMachineDrivers.forTile(target);
             if (driver == null) {
                 continue;
             }
-            if (blocking && !smartBlocking) {
-                if (!driver.hasContents(target)) {
-                    return false;
-                }
-            } else if (!driver.isBusy(target)) {
+            if (!driver.isBusy(target)) {
                 return false;
             }
         }

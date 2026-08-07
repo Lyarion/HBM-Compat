@@ -52,17 +52,6 @@ public final class SolderingStationDriver extends AbstractHbmMachineDriver {
     }
 
     @Override
-    public boolean hasContents(TileEntity tile) {
-        TileEntityMachineSolderingStation machine = (TileEntityMachineSolderingStation) tile;
-        // Fully-drained check for AE2 blocking mode: any progress, any item in
-        // input OR output slots, or any fluid in the input tank.
-        return machine.progress > 0
-                || hasItems(machine, BUSY_INPUT_SLOTS)
-                || hasItems(machine, OUTPUT_SLOTS)
-                || hasFluids(new FluidTank[] { machine.tank });
-    }
-
-    @Override
     public boolean push(TileEntity tile, HbmRecipeMatch match, PatternStacks suppliedInputs) {
         TileEntityMachineSolderingStation machine = (TileEntityMachineSolderingStation) tile;
         SolderingRecipe recipe = (SolderingRecipe) match.getRecipe();
