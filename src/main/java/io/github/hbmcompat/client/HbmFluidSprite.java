@@ -5,6 +5,7 @@ import java.io.IOException;
 
 import javax.imageio.ImageIO;
 
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.resources.IResource;
 import net.minecraft.client.resources.IResourceManager;
@@ -79,10 +80,33 @@ public final class HbmFluidSprite extends TextureAtlasSprite {
             applyTint(image, tint);
         }
 
-        // Single, non-animated frame; null anim section is handled by vanilla loadSprite
-        // (same as HBM's TextureAtlasSpriteMutatable passes for non-animated textures).
-        loadSprite(new BufferedImage[] { image }, null, false);
+        // The array passed to loadSprite is indexed by MIPMAP LEVEL, not by animation
+        // frame: loadSprite sizes framesTextureData from images.length, and TextureMap
+        // later calls generateMipmaps(mipmapLevels), which indexes levels 1..mipmapLevels
+        // unconditionally. A one-element array therefore crashes with
+        // ArrayIndexOutOfBoundsException: 1 as soon as mipmapping is enabled.
+        // Allocate 1 + mipmapLevels and leave the higher levels null — vanilla
+        // downsamples level 0 to fill them. Same allocation TextureMap and HBM's
+        // TextureAtlasSpriteMutatable use.
+        BufferedImage[] levels = new BufferedImage[1 + mipmapLevels()];
+        levels[0] = image;
+
+        // Anisotropic filtering must match the atlas: when it is on, loadSprite pads
+        // every sprite by 16px, and a sprite that opted out would stitch misaligned.
+        loadSprite(levels, null, anisotropicFiltering() > 1.0F);
         return false;
+    }
+
+    /** The block atlas' mipmap level, clamped defensively — a negative value would size the array to 0. */
+    private static int mipmapLevels() {
+        Minecraft mc = Minecraft.getMinecraft();
+        return mc != null ? Math.max(0, mc.gameSettings.mipmapLevels) : 0;
+    }
+
+    /** The block atlas' anisotropic filtering level ({@code 1} means off). */
+    private static float anisotropicFiltering() {
+        Minecraft mc = Minecraft.getMinecraft();
+        return mc != null ? mc.gameSettings.anisotropicFiltering : 1;
     }
 
     /** Multiplies every pixel's RGB by {@code tint} (0xRRGGBB), leaving alpha intact. */
