@@ -1,0 +1,5 @@
+tile.me_hbm_processing_adapter.name=ME HBM样板适配器
+item.hbm_fluid_import_bus.name=ME HBM 流体输入总线
+item.hbm_fluid_export_bus.name=ME HBM 流体输出总线
+tooltip.hbmcompat.hbm_machine=HBM 机器：%s
+tooltip.hbmcompat.hbm_recipe=HBM 配方：%s

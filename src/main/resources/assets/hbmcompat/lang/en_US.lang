@@ -1,0 +1,5 @@
+tile.me_hbm_processing_adapter.name=ME-HBM Processing Adapter
+item.hbm_fluid_import_bus.name=ME HBM Fluid Import Bus
+item.hbm_fluid_export_bus.name=ME HBM Fluid Export Bus
+tooltip.hbmcompat.hbm_machine=HBM machine: %s
+tooltip.hbmcompat.hbm_recipe=HBM recipe: %s

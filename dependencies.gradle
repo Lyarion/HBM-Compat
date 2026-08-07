@@ -1,0 +1,27 @@
+dependencies {
+    api('com.github.GTNewHorizons:NotEnoughEnergistics:1.7.38:dev')
+    api('com.github.GTNewHorizons:NotEnoughItems:2.8.114-GTNH:dev')
+    api('com.github.GTNewHorizons:Applied-Energistics-2-Unofficial:rv3-beta-1024-GTNH:dev')
+    devOnlyNonPublishable('com.github.GTNewHorizons:AE2FluidCraft-Rework:1.5.99-gtnh:dev') {
+        transitive = false
+    }
+
+    // HBM Nuclear Tech Mod is required at both compile and runtime: the recipe
+    // drivers and fluid registry reference HBM types directly (setRecipe,
+    // ModuleMachineBase, ArcWelderRecipes, SolderingRecipes, api.hbm.fluidmk2).
+    // Pulled as a deobfuscated dev-only jar from libs/, exactly like ntm-fc did,
+    // so it is present in dev/runClient but never published as a Maven dependency.
+    def hbmJars = fileTree(dir: 'libs', include: 'HBM-NTM-*.jar').files.toList()
+    if (hbmJars.isEmpty()) {
+        throw new GradleException(
+            "\n\nNo HBM jar found in libs/.\n" +
+            "Place the HBM Nuclear Tech Mod release JAR in the libs/ directory before building.\n")
+    }
+    if (hbmJars.size() > 1) {
+        throw new GradleException(
+            "\n\nMultiple JARs found in libs/: ${hbmJars.collect { it.name }.join(', ')}.\n" +
+            "Keep only one HBM jar in libs/ at a time.\n")
+    }
+    devOnlyNonPublishable(rfg.deobf(project.files(hbmJars[0])))
+
+}

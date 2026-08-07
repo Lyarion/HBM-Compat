@@ -1,0 +1,32 @@
+# Gradle
+.gradle/
+build/
+out/
+
+# The Gradle wrapper jar MUST stay tracked, or ./gradlew will not work on a fresh clone.
+!gradle/wrapper/gradle-wrapper.jar
+
+# Minecraft dev runtime (natives, world saves, server.properties, logs)
+run/
+
+# HBM Nuclear Tech Mod is a dev-only compile dependency and is NOT redistributed here.
+# Drop your own copy of HBM-NTM-*.jar into libs/ before building -- see README.md.
+libs/*.jar
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.classpath
+.project
+
+# Local tooling / machine-specific settings
+.claude/
+
+# OS cruft
+.DS_Store
+Thumbs.db
+desktop.ini

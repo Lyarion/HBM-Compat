@@ -1,0 +1,21 @@
+[
+  {
+    "modid": "hbmcompat",
+    "name": "HBM Compat",
+    "description": "Standalone AE2 + HBM addon: self-registers HBM fluids as Forge fluids, mirrors HBM fluid containers into Forge's container registry so they can be filled and drained in ME terminals, transfers supported HBM NTM NEI recipes into AE2/AE2FC processing patterns, and provides an ME-HBM processing adapter plus HBM fluid buses.",
+    "version": "${modVersion}",
+    "mcversion": "${minecraftVersion}",
+    "url": "https://github.com/Lyarion/HBM-Compat",
+    "authorList": ["Lyarion"],
+    "credits": "GTNewHorizons; HBM NTM; Forge fluid naming scheme mirrors NTM Fluid Converters by Justus0405",
+    "logoFile": "",
+    "screenshots": [],
+    "dependencies": [
+      "hbm",
+      "NotEnoughItems",
+      "neenergistics",
+      "appliedenergistics2",
+      "ae2fc"
+    ]
+  }
+]

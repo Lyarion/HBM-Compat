@@ -1,0 +1,2 @@
+# Place your own copy of HBM-NTM-*.jar in this directory before building.
+# It is a dev-only compile dependency and is deliberately not redistributed. See README.md.

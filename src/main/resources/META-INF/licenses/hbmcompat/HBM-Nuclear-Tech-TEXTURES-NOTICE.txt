@@ -1,0 +1,26 @@
+HBM's Nuclear Tech Mod fluid GUI textures
+
+Upstream project:
+  HBM's Nuclear Tech Mod (NTM)
+  https://github.com/HbmMods/Hbm-s-Nuclear-Tech-GIT
+
+Upstream asset location:
+  src/main/resources/assets/hbm/textures/gui/fluids/*.png
+
+License:
+  GNU General Public License v3.0 (with LGPL v3 where applicable)
+  See the upstream LICENSE and LICENSE.LESSER files in the NTM repository.
+
+Use in HBM Compat:
+  HBM Compat does NOT copy or redistribute any of HBM's fluid textures.
+  For each HBM fluid it registers as a Forge fluid, the block-atlas sprite
+  (io.github.hbmcompat.client.HbmFluidSprite) reads HBM's own swatch PNG
+  directly from the HBM jar through the resource manager at texture-stitch
+  time, applying HBM's per-fluid guiTint exactly as HBM does. Because NTM is
+  a hard runtime dependency of this mod, its assets are always present; no
+  art is bundled here. When HBM ships no dedicated swatch for a fluid (e.g.
+  custom/foreign fluids that reuse a shared *_base texture), a solid swatch
+  is synthesized from the fluid's own colour instead.
+
+  This runtime-reuse approach means the textures remain served solely from
+  the HBM jar under HBM's own license; this mod ships none of them.
