@@ -37,20 +37,40 @@ public final class PartHbmFluidImportBus extends PartFluidImportBus {
     }
 
     // Thin diagnostic wrapper over the AE2 base doBusWork(). Reports which gate the
-    // tick reached (inactive / chunk-unloaded / no output-tank target / no fluid moved /
-    // moved) only when -Dhbmcompat.debugBus=true. The base loop then calls our
-    // overridden getTarget()/importStuff() below to do the actual transfer.
+    // tick reached (inactive / chunk-unloaded / structurally unusable target / no tank
+    // available right now / attempting) only when -Dhbmcompat.debugBus=true. The base
+    // loop then calls our overridden getTarget()/importStuff() below to do the actual
+    // transfer.
     @Override
     protected TickRateModulation doBusWork() {
+        TileEntity self = getHost() == null ? null : getHost().getTile();
+
+        // Back off rather than let the base class sleep us. PartBaseImportBus.doBusWork
+        // returns SLEEP when getTarget() == null, and a slept AE2 device is only woken by
+        // wakeDevice/alertDevice -- a neighbour or setting change, or the node rejoining
+        // the grid. HBM raises none of those when a tank's mode is switched or it is
+        // filled, so sleeping on a tank that merely has nothing to give right now would
+        // strand this bus permanently: the player switches the tank to send mode, fills
+        // it, and nothing ever happens until the chunk reloads or the bus is replaced.
+        // SLOWER is bounded by TickRates.ImportBus (max 40 ticks), and this early-out is
+        // only a driver lookup plus an array-length check, so idling here is cheap.
+        if (getProxy().isActive() && canDoBusWork() && !HbmFluidAccess.hasSource(resolveTarget())) {
+            if (HbmCompat.DEBUG_BUS) {
+                diag.report(self, "no fluid source tank available right now "
+                        + "(storage tank not in send/both mode, or all output tanks empty/pressurized); polling");
+            }
+            return TickRateModulation.SLOWER;
+        }
+
         if (HbmCompat.DEBUG_BUS) {
-            TileEntity self = getHost() == null ? null : getHost().getTile();
             if (!getProxy().isActive()) {
                 diag.report(self, "gate: proxy inactive (no channel/power?)");
             } else if (!canDoBusWork()) {
                 diag.report(self, "gate: target chunk not loaded");
             } else if (getTarget() == null) {
-                diag.report(self, "gate: no fluid source tank at target "
-                        + "(machine w/o output tank e.g. arc welder/soldering, or storage tank not in send/both mode)");
+                diag.report(self, "gate: target can never be a fluid source "
+                        + "(not an HBM machine/storage core, core unresolved, or machine w/o output tank "
+                        + "e.g. arc welder/soldering station)");
             } else {
                 diag.report(self, "ticking: source ok, attempting import");
             }
@@ -58,10 +78,16 @@ public final class PartHbmFluidImportBus extends PartFluidImportBus {
         return super.doBusWork();
     }
 
+    // Structural check only: "could this ever be a source", not "does it have fluid to
+    // give right now". AE2 routes this through PartSharedItemBus.isSleeping(), which is
+    // recomputed only on neighbour/setting changes -- so a dynamic answer here would let
+    // the device sleep forever once an HBM tank went idle. The live availability check
+    // lives in doBusWork()/importStuff() instead. See HbmFluidAccess for the full
+    // reasoning.
     @Override
     protected Object getTarget() {
         TileEntity target = resolveTarget();
-        return HbmFluidAccess.hasSource(target) ? target : null;
+        return HbmFluidAccess.canEverSource(target) ? target : null;
     }
 
     private TileEntity resolveTarget() {
