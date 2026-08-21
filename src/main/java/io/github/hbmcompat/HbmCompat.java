@@ -19,8 +19,17 @@ import cpw.mods.fml.common.event.FMLPreInitializationEvent;
         name = HbmCompat.NAME,
         version = Tags.VERSION,
         acceptedMinecraftVersions = "[1.7.10]",
+        // The AE2 bound is not decoration: init() registers HbmPatternEncodeHandler, whose
+        // verification resolves appeng.api.parts.IPatternTerminal$PatternEncodeListener. That
+        // nested interface only exists from rv3-beta-1006 onwards (AE2 9220db1fb, "expose pattern
+        // encoding apis"), and AE2FC's own bound is [rv3-beta-238,) - far too loose to catch it.
+        // Without a bound here, an older AE2 loads this mod happily and then dies in init() with a
+        // bare NoClassDefFoundError instead of FML reporting an unmet dependency. The floor is the
+        // version this mod is compiled against (see dependencies.gradle), which is also well above
+        // the stack-type APIs it uses (StorageName, IAEStackType, getAEInventoryByName).
         dependencies = "required-after:hbm;required-after:NotEnoughItems;"
-                + "required-after:neenergistics@[1.7.38,);required-after:appliedenergistics2;"
+                + "required-after:neenergistics@[1.7.38,);"
+                + "required-after:appliedenergistics2@[rv3-beta-1024,);"
                 + "required-after:ae2fc@[1.5.99-gtnh,)")
 public final class HbmCompat {
 
