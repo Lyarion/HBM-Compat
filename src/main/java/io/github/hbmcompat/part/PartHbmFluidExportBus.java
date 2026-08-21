@@ -11,11 +11,13 @@ import com.hbm.inventory.fluid.Fluids;
 import com.hbm.inventory.fluid.tank.FluidTank;
 
 import appeng.api.config.Actionable;
+import appeng.api.networking.crafting.ICraftingLink;
 import appeng.api.networking.energy.IEnergyGrid;
 import appeng.api.networking.ticking.TickRateModulation;
 import appeng.api.storage.IMEMonitor;
 import appeng.api.storage.StorageName;
 import appeng.api.storage.data.IAEFluidStack;
+import appeng.api.storage.data.IAEStack;
 import appeng.me.GridAccessException;
 import appeng.tile.inventory.IAEStackInventory;
 import appeng.util.Platform;
@@ -149,6 +151,29 @@ public final class PartHbmFluidExportBus extends PartFluidExportBus {
     protected Object getTarget() {
         TileEntity target = getHbmTarget();
         return HbmFluidAccess.canEverSink(target) ? target : null;
+    }
+
+    // getTarget() above breaks an assumption the base class makes about itself: PartBaseExportBus
+    // treats getTarget() as always yielding an InventoryAdaptor, and injectCraftedItems() acts on
+    // that directly. An HBM machine core is a plain TileEntity, so on AE2 before rv3-beta-1035 the
+    // base method reached `throw new IllegalStateException("Target is not a InventoryAdaptor")`;
+    // 83cb720ef softened that to `return items`. Since the declared floor is rv3-beta-1024, the
+    // throwing versions are inside the supported range, so pin the safe answer here rather than
+    // depending on which AE2 the player happens to run.
+    //
+    // Returning `items` unchanged means "accepted none of it", which is the honest answer: this bus
+    // has no item inventory to place a crafting result into, and pushing fluid into an HBM tank
+    // requires the type-matching that doBusWork()/findTank() does. Rejected output stays in the ME
+    // network, where the normal export loop picks it up on a later tick, so nothing is lost.
+    //
+    // Currently defensive rather than load-bearing: the doBusWork() override never calls
+    // craftingTracker.handleCrafting(), so this bus requests no crafting jobs and AE2 holds no link
+    // to inject against. That also means a Crafting Card in this bus does nothing - a separate gap,
+    // not addressed here. The override exists so re-enabling that path cannot resurrect the throw.
+    @Override
+    public IAEStack<?> injectCraftedItems(final ICraftingLink link, final IAEStack<?> items,
+            final Actionable mode) {
+        return items;
     }
 
     private TileEntity getHbmTarget() {
