@@ -24,4 +24,6 @@ dependencies {
     }
     devOnlyNonPublishable(rfg.deobf(project.files(hbmJars[0])))
 
+    testImplementation('junit:junit:4.12')
+
 }

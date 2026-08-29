@@ -1,6 +1,7 @@
 package io.github.hbmcompat.part;
 
 import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.IIcon;
 import net.minecraftforge.fluids.FluidStack;
@@ -11,6 +12,8 @@ import com.hbm.inventory.fluid.Fluids;
 import com.hbm.inventory.fluid.tank.FluidTank;
 
 import appeng.api.config.Actionable;
+import appeng.api.config.SchedulingMode;
+import appeng.api.config.Settings;
 import appeng.api.networking.crafting.ICraftingLink;
 import appeng.api.networking.energy.IEnergyGrid;
 import appeng.api.networking.ticking.TickRateModulation;
@@ -28,7 +31,10 @@ import io.github.hbmcompat.machine.HbmTargets;
 
 public final class PartHbmFluidExportBus extends PartFluidExportBus {
 
+    private static final String NBT_NEXT_SLOT = "hbmNextSlot";
+
     private final BusDiagnostics diag = new BusDiagnostics("export");
+    private final ExportSlotScheduler slotScheduler = new ExportSlotScheduler(Platform.getRandom());
 
     public PartHbmFluidExportBus(ItemStack stack) {
         super(stack);
@@ -37,6 +43,18 @@ public final class PartHbmFluidExportBus extends PartFluidExportBus {
     @Override
     public IIcon getFaceIcon() {
         return CompatTextures.HBM_FLUID_EXPORT.getIcon();
+    }
+
+    @Override
+    public void readFromNBT(NBTTagCompound extra) {
+        super.readFromNBT(extra);
+        slotScheduler.setNextSlot(extra.getInteger(NBT_NEXT_SLOT));
+    }
+
+    @Override
+    public void writeToNBT(NBTTagCompound extra) {
+        super.writeToNBT(extra);
+        extra.setInteger(NBT_NEXT_SLOT, slotScheduler.getNextSlot());
     }
 
     @Override
@@ -68,8 +86,13 @@ public final class PartHbmFluidExportBus extends PartFluidExportBus {
             boolean moved = false;
             boolean anyConfigured = false;
             String lastSkip = null;
+            int slotCount = availableSlots();
+            int inspectedSlots = 0;
+            SchedulingMode schedulingMode = (SchedulingMode) getConfigManager()
+                    .getSetting(Settings.SCHEDULING_MODE);
 
-            for (int slot = 0; slot < availableSlots() && remainingBudget > 0; slot++) {
+            for (; inspectedSlots < slotCount && remainingBudget > 0; inspectedSlots++) {
+                int slot = slotScheduler.slotForIteration(schedulingMode, inspectedSlots, slotCount);
                 IAEFluidStack configured = (IAEFluidStack) config.getAEStackInSlot(slot);
                 if (configured == null || configured.getFluidStack() == null) {
                     continue;
@@ -112,6 +135,7 @@ public final class PartHbmFluidExportBus extends PartFluidExportBus {
                 remainingBudget -= inserted;
                 moved = true;
             }
+            slotScheduler.finishTick(schedulingMode, inspectedSlots, slotCount);
 
             if (moved) {
                 diag.report(self, "OK: exporting fluid into machine input tank");
