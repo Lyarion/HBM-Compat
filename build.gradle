@@ -2,5 +2,5 @@ plugins {
     id 'com.gtnewhorizons.gtnhconvention'
 }
 
-project.ext.modVersion = '1.0.5'
+project.ext.modVersion = '1.0.6'
 version = modVersion
