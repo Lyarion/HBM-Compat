@@ -41,6 +41,7 @@ public final class ModContent {
     public static void init() {
         registerBusUpgrades(new ItemStack(fluidImportBus));
         registerBusUpgrades(new ItemStack(fluidExportBus));
+        registerAdapterUpgrades(new ItemStack(processingAdapter));
         ModRecipes.init();
 
         // AE2's InterfaceTerminalRegistry only seeds its own TileInterface/PartInterface/PartP2PInterface, and the
@@ -54,5 +55,16 @@ public final class ModContent {
         Upgrades.REDSTONE.registerItem(bus, 1);
         Upgrades.SPEED.registerItem(bus, 4);
         Upgrades.SUPERSPEED.registerItem(bus, 4);
+    }
+
+    /**
+     * The adapter runs AE2's stock interface GUI, which reveals one more row of nine pattern slots per installed
+     * pattern capacity card, and DualityInterface already backs all four rows. Registering the card against the
+     * adapter block is therefore the whole feature - without it the upgrade inventory rejects the card, because it
+     * decides what it accepts by looking this block up in Upgrades.getSupported(). Three matches AE2's own limit for
+     * the ME Interface and fills the 36-slot pattern inventory exactly.
+     */
+    private static void registerAdapterUpgrades(ItemStack adapter) {
+        Upgrades.PATTERN_CAPACITY.registerItem(adapter, 3);
     }
 }

@@ -61,6 +61,7 @@ import appeng.helpers.IInterfaceHost;
 import appeng.helpers.IPrimaryGuiIconProvider;
 import appeng.helpers.IPriorityHost;
 import appeng.me.GridAccessException;
+import appeng.me.helpers.AENetworkProxy;
 import appeng.tile.TileEvent;
 import appeng.tile.events.TileEventType;
 import appeng.tile.grid.AENetworkInvTile;
@@ -75,7 +76,7 @@ public class TileHbmAdapter extends AENetworkInvTile
         implements IGridTickable, ITileStorageMonitorable, IStorageMonitorable, IInventoryDestination, IInterfaceHost,
         IPriorityHost, IPowerChannelState, IPrimaryGuiIconProvider {
 
-    private final DualityInterface duality = new HbmDuality(this.getProxy(), this);
+    private final DualityInterface duality = createDuality();
     private ForgeDirection pointAt = ForgeDirection.UNKNOWN;
 
     private static final int POWERED_FLAG = 1;
@@ -83,6 +84,24 @@ public class TileHbmAdapter extends AENetworkInvTile
     private static final int BOOTING_FLAG = 4;
     private static final int STUCK_FLAG = 8;
     private int clientFlags = 0; // sent as byte.
+
+    /**
+     * DualityInterface builds its upgrade inventory as a StackUpgradeInventory over the grid proxy's machine
+     * representation, captured once in the constructor, and that stack is what decides which cards the four upgrade
+     * slots accept - it is matched against {@link Upgrades#getSupported()}, where {@link ModContent} registers the
+     * pattern capacity card under the adapter block. AENetworkInvTile seeds the proxy from AEBaseTile's
+     * tile-to-item registry, which only carries entries put there by AE2's own feature handler plus the one
+     * {@link BlockHbmProcessingAdapter} adds by hand, so pin the block onto the proxy before the duality reads it
+     * rather than depending on that registration.
+     */
+    private DualityInterface createDuality() {
+        final AENetworkProxy proxy = this.getProxy();
+        final ItemStack self = adapterStack();
+        if (self != null) {
+            proxy.setVisualRepresentation(self);
+        }
+        return new HbmDuality(proxy, this);
+    }
 
     @MENetworkEventSubscribe
     public void stateChange(final MENetworkChannelsChanged c) {
@@ -376,9 +395,10 @@ public class TileHbmAdapter extends AENetworkInvTile
     }
 
     /**
-     * AEBaseTile.getItemFromTile() resolves through a registry that only AE2's own tiles are entered into, so it
-     * returns null here. Return the adapter block directly instead, otherwise the ME Interface Terminal has no icon
-     * for this entry and falls back to the neighbouring machine's - or to nothing at all.
+     * AEBaseTile.getItemFromTile() resolves through a registry keyed by tile class, which the adapter only appears in
+     * because {@link BlockHbmProcessingAdapter} registers itself there by hand. Return the adapter block directly
+     * instead of relying on that, otherwise the ME Interface Terminal has no icon for this entry and falls back to
+     * the neighbouring machine's - or to nothing at all.
      */
     @Override
     public ItemStack getSelfRep() {
