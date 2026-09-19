@@ -12,7 +12,7 @@ import api.hbm.fluidmk2.IFluidStandardSenderMK2;
  * kinds of target we support:
  *
  * <ol>
- * <li>The four recipe-selection machines, via their {@link IHbmMachineDriver}
+ * <li>The six recipe-selection machines, via their {@link IHbmMachineDriver}
  * (input tanks = {@link IHbmMachineDriver#getInputTanks}, output tanks =
  * {@link IHbmMachineDriver#getOutputTanks}). The driver is always checked first,
  * so machine behaviour is unchanged.</li>

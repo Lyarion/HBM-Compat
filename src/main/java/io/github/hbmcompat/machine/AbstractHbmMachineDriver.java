@@ -61,20 +61,37 @@ abstract class AbstractHbmMachineDriver implements IHbmMachineDriver {
             TileEntity tile,
             FluidTank[] tanks,
             com.hbm.inventory.FluidStack[] fluids) {
+        return tanksCompatible(tile, tanks, fluids, true);
+    }
+
+    /**
+     * Variant used while a multi-lane driver is probing candidates. A rejected lane must not emit
+     * a diagnostic immediately: doing so for all four lanes on every AE2 retry would alternate the
+     * dedup key and spam the log. The factory driver reports one aggregate reason after the scan.
+     */
+    protected boolean tanksCompatible(
+            TileEntity tile,
+            FluidTank[] tanks,
+            com.hbm.inventory.FluidStack[] fluids,
+            boolean report) {
         if (fluids == null) {
             if (hasFluids(tanks)) {
-                AdapterDiagnostics.report(
-                        tile,
-                        "recipe needs no input fluid but an input tank still holds some. Drain the input tank(s).");
+                if (report) {
+                    AdapterDiagnostics.report(
+                            tile,
+                            "recipe needs no input fluid but an input tank still holds some. Drain the input tank(s).");
+                }
                 return false;
             }
             return true;
         }
         if (fluids.length > tanks.length) {
-            AdapterDiagnostics.report(
-                    tile,
-                    "recipe needs " + fluids.length + " input fluids but this machine has only " + tanks.length
-                            + " input tanks");
+            if (report) {
+                AdapterDiagnostics.report(
+                        tile,
+                        "recipe needs " + fluids.length + " input fluids but this machine has only " + tanks.length
+                                + " input tanks");
+            }
             return false;
         }
         for (int index = 0; index < tanks.length; index++) {
@@ -83,7 +100,7 @@ abstract class AbstractHbmMachineDriver implements IHbmMachineDriver {
             }
             if (index >= fluids.length || fluids[index].pressure != 0
                     || tanks[index].getTankType() != fluids[index].type) {
-                if (AdapterDiagnostics.enabled()) {
+                if (report && AdapterDiagnostics.enabled()) {
                     AdapterDiagnostics.report(
                             tile,
                             "input tank " + index + " holds " + tanks[index].getFill() + " of "
@@ -182,6 +199,28 @@ abstract class AbstractHbmMachineDriver implements IHbmMachineDriver {
             }
         }
         return plan;
+    }
+
+    /**
+     * Whether calling ModuleMachineBase.setupTanks for {@code expected} can preserve every drop
+     * already present. HBM clears a tank when its type/pressure changes and also clears unused
+     * tanks, so this check is mandatory before retargeting an idle factory lane.
+     */
+    protected boolean tanksCanBeRetypedWithoutLoss(
+            FluidTank[] tanks,
+            com.hbm.inventory.FluidStack[] expected) {
+        for (int index = 0; index < tanks.length; index++) {
+            FluidTank tank = tanks[index];
+            if (tank == null || tank.getFill() <= 0) {
+                continue;
+            }
+            if (expected == null || index >= expected.length || expected[index] == null
+                    || tank.getTankType() != expected[index].type
+                    || tank.getPressure() != expected[index].pressure) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
