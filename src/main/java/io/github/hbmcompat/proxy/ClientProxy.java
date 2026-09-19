@@ -15,6 +15,11 @@ public final class ClientProxy extends CommonProxy {
     }
 
     @Override
+    public void postInit() {
+        io.github.hbmcompat.client.BobFluidDisplayCompat.hideFluidBlocks();
+    }
+
+    @Override
     public void init() {
         super.init();
         HbmProcessorInstaller installer = new HbmProcessorInstaller();

@@ -114,6 +114,19 @@ public final class HbmForgeContainerBridge {
             ItemStack empty = container.emptyContainer.copy();
             empty.stackSize = 1;
 
+            FluidStack existing = FluidContainerRegistry.getFluidForFilledItem(full);
+            if (existing != null) {
+                skippedAlreadyKnown++;
+                if (existing.getFluid() != forgeFluid || existing.amount != container.content) {
+                    HbmCompat.LOG.warn(
+                            "Preserving existing container mapping {}:{} -> {} ({} mB); HBM-Compat expects {} ({} mB)",
+                            net.minecraft.item.Item.itemRegistry.getNameForObject(full.getItem()),
+                            full.getItemDamage(), existing.getFluid().getName(), existing.amount,
+                            forgeFluid.getName(), container.content);
+                }
+                continue;
+            }
+
             if (FluidContainerRegistry
                     .registerFluidContainer(new FluidStack(forgeFluid, container.content), full, empty)) {
                 bridged++;

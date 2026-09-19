@@ -10,6 +10,8 @@ public class CommonProxy {
 
     public void preInit() {}
 
+    public void postInit() {}
+
     public void init() {
         FMLCommonHandler.instance().bus().register(new HbmPatternEncodeHandler());
         for (Object handler : StackInfo.stackStringifyHandlers) {

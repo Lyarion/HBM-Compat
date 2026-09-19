@@ -14,6 +14,16 @@ public final class HbmFluidStackStringifyHandler implements IStackStringifyHandl
     public static final String VIRTUAL_STACK_MARKER = "neeHbmCompatFluid";
     private static final String SERIALIZED_STACK_MARKER = "neeHbmCompatSerializedFluid";
 
+    /**
+     * Newer NEI/NEE checks this before calling getFluid during recipe transfer.
+     * Intentionally no @Override: the minimum supported NEI predates this default
+     * interface method, but the matching signature overrides it on newer versions.
+     * Real containers and identifiers remain items, not recipe display carriers.
+     */
+    public boolean isFluidDisplayItem(ItemStack stack) {
+        return getIconFluid(stack) != null;
+    }
+
     @Override
     public NBTTagCompound convertItemStackToNBT(ItemStack stack, boolean saveStackSize) {
         // Deliberately icon-only, NOT getFluid(). Identifiers are type markers, not
@@ -97,11 +107,10 @@ public final class HbmFluidStackStringifyHandler implements IStackStringifyHandl
      * {@code StackInfo.getFluid}.
      *
      * <p>An identifier carries a type but no volume, so it reports one bucket —
-     * matching {@code AEFluidStackType.getAmountPerUnit()}. That is safe against
-     * fluid duplication because it never makes the identifier a container: insertion
-     * and drain paths test {@code IFluidContainerItem} and Forge's
-     * {@code FluidContainerRegistry} only, and an identifier is in neither, so it can
-     * configure a filter but can never be consumed for fluid.
+     * matching {@code AEFluidStackType.getAmountPerUnit()}. This handler alone
+     * never makes the identifier a container. Other mods (notably
+     * Bob) may independently register it in {@code FluidContainerRegistry}; that
+     * registration and its fill/drain behavior are outside this handler's control.
      */
     private static FluidStack getIdentifierFluid(ItemStack stack) {
         com.hbm.inventory.fluid.FluidType hbmFluid = HbmFluidAccess.getIdentifierFluidType(stack);

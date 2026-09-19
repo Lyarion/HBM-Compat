@@ -30,7 +30,7 @@ import cpw.mods.fml.common.event.FMLPreInitializationEvent;
         dependencies = "required-after:hbm;required-after:NotEnoughItems;"
                 + "required-after:neenergistics@[1.7.38,);"
                 + "required-after:appliedenergistics2@[rv3-beta-1024,);"
-                + "required-after:ae2fc@[1.5.99-gtnh,)")
+                + "required-after:ae2fc@[1.5.99-gtnh,);after:bobfluidtranslator")
 public final class HbmCompat {
 
     public static final String MODID = "hbmcompat";
@@ -60,16 +60,14 @@ public final class HbmCompat {
 
     @Mod.EventHandler
     public void preInit(FMLPreInitializationEvent event) {
+        CompatConfig.load(event.getSuggestedConfigurationFile());
         ModContent.preInit();
         proxy.preInit();
     }
 
     @Mod.EventHandler
     public void init(FMLInitializationEvent event) {
-        // Self-register HBM fluids as Forge fluids (drops the old ntm-fc runtime
-        // dependency). Runs on both sides so servers register them too. Guarded so
-        // a coexisting ntm-fc that registered first is respected — same names either
-        // way, so old saves migrate seamlessly.
+        // Bob registers in preInit; select its actual identities before installing consumers.
         HbmForgeFluidRegistry.registerHbmFluidsInForge();
         ModContent.init();
         proxy.init();
@@ -79,7 +77,10 @@ public final class HbmCompat {
     public void postInit(FMLPostInitializationEvent event) {
         // Must run after HBM's own MainRegistry.PostLoad, which is what populates
         // com.hbm.inventory.FluidContainerRegistry. The "required-after:hbm"
-        // dependency above guarantees that ordering.
+        // dependency above guarantees that ordering. Optional after:bobfluidtranslator
+        // also lets Bob establish its container mappings before we fill any gaps.
+        HbmForgeFluidRegistry.registerExistingAliases();
         HbmForgeContainerBridge.registerHbmContainersInForge();
+        proxy.postInit();
     }
 }

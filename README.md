@@ -41,6 +41,29 @@ HBM 的流体容器（罐 / 气罐 / 流体桶 / 铅罐 / 单元 / 粒子容器�
 
 如需整体关闭这套桥接，可加启动参数 `-Dhbmcompat.noContainerBridge=true`。
 
+### 与 NTGE Bob Fluid Translator 共存
+
+启动时读取 `config/hbmcompat.cfg`，修改后需要完整重启；客户端与服务端必须使用相同的流体映射模式。
+
+```text
+fluids {
+    S:fluidMapping=auto
+}
+client {
+    B:hideBobFluidBlocks=false
+}
+```
+
+- `auto`（默认）：安装 Bob 时调用 Bob 的实际映射，复用其 Forge 流体对象，支持自定义后缀和映射；不会再为已复用类型额外注册无后缀流体。Bob 未安装或某类型没有可用映射时，回退到 HBM-Compat 原名称。
+- `legacy`：保留 HBM-Compat 原名称，供已有存档过渡；和 Bob 共存时仍可能出现两份流体、容器与首选输出不一致。它不是“强制 Bob 使用 HBM-Compat”的开关。
+- `hideBobFluidBlocks=true`：可选隐藏 NEI 中 Bob 的 `xxx_fluid_block` 物品项，保留 NEI 的正常流体显示项；不删除方块、桶或流体注册，也不改变传输行为。默认关闭，便于诊断。
+
+流体总线、配方编码、样板适配器、HBM 图标及识别码转换共用首选映射。反向查找同时接受**已经存在且没有歧义**的旧名称和 Bob 名称；不会为输入别名凭空创建第二份流体。自定义映射若让两个 HBM 类型共用一个首选 Forge 名称，会明确报错，而不是静默把一种流体当成另一种。
+
+容器桥在 Bob 之后执行，保留已有容器映射，只补缺失项；已有映射与首选流体或容量不同会输出警告。Bob 未安装或关闭自身容器桥时，HBM-Compat 仍可桥接真实容器。HBM-Compat 不接管 Bob 对图标/识别码的容器注册，相关实际灌装、倒出行为需要另外测试。
+
+**旧存档升级：本功能不迁移 ME 库存、流体槽或已编码样板。** 如果存档保存了 `deuterium` 等无后缀名称，添加 Bob 或从 `legacy` 改为 `auto` 前，应先备份，并保持 `legacy` 直到旧库存与样板完成迁移。仅有反向别名不代表 AE 会合并两种库存；新模式未注册的旧名称无法由本模组自动恢复。新测试世界可直接使用 `auto`。
+
 ### ME HBM 样板适配器
 
 一个单独的方块，基于 AE2 的 ME 接口架构，将编码后的 AE2 / AE2FC 样板转换为 HBM 机器操作。
@@ -74,6 +97,10 @@ Big-Ass Tank、BAT-9000、桶、UF6 / PuF6 罐、油桶等等全部适用，将�
 
 总线会读取储罐自身的收发模式（`getSendingTanks` / `getReceivingTanks`），
 所以把储罐设成只收或只发时，总线会安静待机，而不是跟储罐的 GUI 设置对抗。
+
+### 新版 NEI / NEE 的配方转移
+
+支持 NEE 1.7.42 使用的 NEI `isFluidDisplayItem` 检查：可解析、非加压且数量为正的 HBM 流体图标会被识别为流体显示项，从 NEI 点击“+”转入处理样板时转换为 AE 流体槽。真实容器及流体识别码不被此接口标记为显示项。保留旧版 NEI 接口兼容，不提高现有最低版本要求。
 
 ## 已知限制
 

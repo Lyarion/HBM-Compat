@@ -1,7 +1,6 @@
 package io.github.hbmcompat.fluid;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
@@ -13,26 +12,11 @@ import com.hbm.inventory.fluid.FluidType;
 import com.hbm.inventory.fluid.Fluids;
 
 import io.github.hbmcompat.HbmCompat;
+import io.github.hbmcompat.CompatConfig;
 
-/**
- * Self-registers every HBM fluid as a Forge fluid.
- *
- * <p>This replaces the old runtime dependency on NTM Fluid Converters
- * ({@code com.justus0405.ntmfluidconverters.FluidConverter}). The registration
- * logic — Forge name = {@code hbmFluid.getName().toLowerCase(Locale.ROOT)}, a
- * {@link HbmBackedFluid} that borrows HBM's own {@code hbmfluid.<name>}
- * localization key, and an {@code isFluidRegistered} guard — is a deliberate
- * byte-for-byte match of ntm-fc so that:
- * <ul>
- *   <li>old saves that stored HBM fluids under the ntm-fc Forge names migrate
- *       seamlessly (same names resolve to the same fluids), and</li>
- *   <li>both mods can coexist: whichever registers a given fluid first wins, and
- *       the {@code FORGE_TO_HBM} reverse map is always populated regardless.</li>
- * </ul>
- *
- * <p>Pressurized HBM fluids are NOT special-cased here — the pressure boundary is
- * enforced at the transfer layer (Forge {@link net.minecraftforge.fluids.FluidStack}
- * has no pressure field), matching the existing compat behaviour.
+/** Registers missing fluids and selects one preferred Forge identity per HBM type.
+ * Bob mappings are resolved through its API, including custom names and suffixes.
+ * Existing legacy names are accepted as input aliases without creating duplicates.
  */
 public final class HbmForgeFluidRegistry {
 
@@ -55,8 +39,8 @@ public final class HbmForgeFluidRegistry {
     /** Forge names of the fluids WE registered (for the texture stitch handler). */
     private static final Set<String> OUR_FLUIDS = new HashSet<String>();
 
-    /** Reverse lookup: Forge fluid name -> HBM FluidType. Always fully populated. */
-    private static final HashMap<String, FluidType> FORGE_TO_HBM = new HashMap<String, FluidType>();
+    private static final FluidMappingTable<FluidType, Fluid> MAPPINGS =
+            new FluidMappingTable<FluidType, Fluid>();
 
     private static boolean registered;
 
@@ -80,7 +64,7 @@ public final class HbmForgeFluidRegistry {
         if (hbmFluid == null || hbmFluid == Fluids.NONE) {
             return null;
         }
-        return FluidRegistry.getFluid(forgeName(hbmFluid));
+        return MAPPINGS.output(hbmFluid);
     }
 
     /**
@@ -91,44 +75,57 @@ public final class HbmForgeFluidRegistry {
         if (forgeFluid == null) {
             return Fluids.NONE;
         }
-        FluidType result = FORGE_TO_HBM.get(forgeFluid.getName());
+        FluidType result = MAPPINGS.input(forgeFluid.getName());
         return result != null ? result : Fluids.NONE;
     }
 
-    /**
-     * Registers every HBM fluid (except NONE) as a Forge fluid, guarded so a
-     * fluid already registered (e.g. by a coexisting ntm-fc) is left untouched.
-     * The reverse map is populated unconditionally. Idempotent per JVM.
-     *
-     * <p>Call once during {@link cpw.mods.fml.common.event.FMLInitializationEvent}.
-     */
+    /** Called in init after Bob has completed preInit. */
     public static synchronized void registerHbmFluidsInForge() {
-        if (registered) {
-            return;
+        if (registered) return;
+        int added = 0;
+        int reusedBob = 0;
+        for (FluidType type : Fluids.getAll()) {
+            if (type == Fluids.NONE) continue;
+            Fluid fluid = CompatConfig.preferBob ? BobFluidBridge.getFluid(type) : null;
+            if (fluid != null) {
+                reusedBob++;
+            } else {
+                String name = forgeName(type);
+                fluid = FluidRegistry.getFluid(name);
+                if (fluid == null) {
+                    Fluid candidate = new HbmBackedFluid(name, type.getUnlocalizedName());
+                    if (FluidRegistry.registerFluid(candidate)) {
+                        OUR_FLUIDS.add(name);
+                        added++;
+                    }
+                    fluid = FluidRegistry.getFluid(name);
+                }
+            }
+            MAPPINGS.prefer(type, fluid.getName(), fluid);
         }
         registered = true;
-
-        int added = 0;
-        for (FluidType hbmFluid : Fluids.getAll()) {
-            if (hbmFluid == Fluids.NONE) {
-                continue;
-            }
-            String forgeName = forgeName(hbmFluid);
-            if (!FluidRegistry.isFluidRegistered(forgeName)) {
-                // Reuse HBM's own "hbmfluid.<name>" localization key rather than
-                // Forge's default "fluid.<name>", so display names stay in sync
-                // with HBM across every language without shipping lang files.
-                Fluid forgeFluid = new HbmBackedFluid(forgeName, hbmFluid.getUnlocalizedName());
-                FluidRegistry.registerFluid(forgeFluid);
-                OUR_FLUIDS.add(forgeName);
-                added++;
-            }
-            FORGE_TO_HBM.put(forgeName, hbmFluid);
+        registerExistingAliases();
+        HbmCompat.LOG.info("HBM fluid mappings: mode={}, {} Bob mappings reused, {} fluids registered",
+                CompatConfig.preferBob ? "auto" : "legacy", reusedBob, added);
+        if (reusedBob > 0) {
+            HbmCompat.LOG.warn("Auto mode uses Bob fluid names. Existing ME fluids/patterns are NOT migrated. "
+                    + "Use fluids.fluidMapping=legacy before loading worlds that still require HBM-Compat names.");
         }
+    }
 
-        HbmCompat.LOG.info(
-                "Registered {} HBM fluids as Forge fluids ({} total mapped)",
-                added,
-                FORGE_TO_HBM.size());
+    /** Run again in postInit to include names registered by other mods during init. */
+    public static void registerExistingAliases() {
+        for (FluidType type : Fluids.getAll()) {
+            if (type == Fluids.NONE) continue;
+            addAlias(type, FluidRegistry.getFluid(forgeName(type)));
+            addAlias(type, BobFluidBridge.getFluid(type));
+        }
+    }
+
+    private static void addAlias(FluidType type, Fluid fluid) {
+        if (fluid != null && !MAPPINGS.alias(type, fluid.getName())) {
+            HbmCompat.LOG.warn("Ignoring conflicting input alias '{}' for HBM fluid {}",
+                    fluid.getName(), type.getName());
+        }
     }
 }
