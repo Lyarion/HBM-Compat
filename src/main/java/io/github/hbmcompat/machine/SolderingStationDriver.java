@@ -28,12 +28,11 @@ public final class SolderingStationDriver extends AbstractHbmMachineDriver {
     @Override
     public HbmRecipeMatch match(ICraftingPatternDetails details) {
         PatternStacks inputs = PatternStacks.inputs(details);
-        PatternStacks outputs = PatternStacks.outputs(details);
+        if (!inputs.isValid()) return null;
         SolderingRecipe found = null;
         for (SolderingRecipe recipe : SolderingRecipes.recipes) {
             if (PatternMatcher.matchesAStacks(flatten(recipe), inputs.getItems())
-                    && PatternMatcher.matchesSingleHbmFluid(recipe.fluid, inputs.getFluids())
-                    && matchSingleOutput(recipe.output, outputs)) {
+                    && PatternMatcher.matchesSingleHbmFluid(recipe.fluid, inputs.getFluids())) {
                 if (found != null) {
                     return null;
                 }

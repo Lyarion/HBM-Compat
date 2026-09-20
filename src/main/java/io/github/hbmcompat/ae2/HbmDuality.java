@@ -95,10 +95,9 @@ public final class HbmDuality extends DualityInterface {
             HbmRecipeMatch match = driver.match(patternDetails);
             if (match == null) {
                 if (diagnose) {
-                    rejection = "no unique HBM recipe matches this pattern on the " + driver.getMachineId()
-                            + ". Either nothing matches (amounts must equal the recipe exactly; chance/multi-output"
-                            + " recipes and pressurised fluids are not supported), or two recipes match and the"
-                            + " choice is ambiguous.";
+                    rejection = "no unique HBM recipe matches this pattern's inputs on the " + driver.getMachineId()
+                            + ". Input types and amounts must match exactly; pressurised fluids are unsupported. "
+                            + "Multiple recipes with the same inputs are ambiguous; pattern outputs are not used to choose.";
                 }
                 continue;
             }
