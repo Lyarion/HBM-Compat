@@ -28,10 +28,10 @@ public final class ChemicalPlantDriver extends AbstractHbmMachineDriver {
     @Override
     public HbmRecipeMatch match(ICraftingPatternDetails details) {
         PatternStacks inputs = PatternStacks.inputs(details);
-        PatternStacks outputs = PatternStacks.outputs(details);
+        if (!inputs.isValid()) return null;
         GenericRecipe found = null;
         for (GenericRecipe recipe : ChemicalPlantRecipes.INSTANCE.recipeOrderedList) {
-            if (PatternMatcher.matches(recipe, inputs, outputs)) {
+            if (PatternMatcher.matchesInputs(recipe, inputs)) {
                 if (found != null) {
                     return null;
                 }

@@ -23,6 +23,8 @@ dependencies {
             "Keep only one HBM jar in libs/ at a time.\n")
     }
     devOnlyNonPublishable(rfg.deobf(project.files(hbmJars[0])))
+    // Exercise the real HBM recipe matcher in tests, not a duplicate test implementation.
+    testImplementation(rfg.deobf(project.files(hbmJars[0])))
 
     testImplementation('junit:junit:4.12')
 

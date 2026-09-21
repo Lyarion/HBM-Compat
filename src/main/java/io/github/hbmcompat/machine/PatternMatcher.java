@@ -8,7 +8,6 @@ import net.minecraftforge.fluids.FluidStack;
 
 import com.hbm.inventory.RecipesCommon.AStack;
 import com.hbm.inventory.recipes.loader.GenericRecipe;
-import com.hbm.inventory.recipes.loader.GenericRecipes.IOutput;
 
 import io.github.hbmcompat.fluid.HbmForgeFluidRegistry;
 
@@ -16,14 +15,12 @@ final class PatternMatcher {
 
     private PatternMatcher() {}
 
-    static boolean matches(GenericRecipe recipe, PatternStacks inputs, PatternStacks outputs) {
-        if (recipe == null || !inputs.isValid() || !outputs.isValid()) {
+    static boolean matchesInputs(GenericRecipe recipe, PatternStacks inputs) {
+        if (recipe == null || !inputs.isValid()) {
             return false;
         }
         return matchesAStacks(recipe.inputItem, inputs.getItems())
-                && matchesHbmFluids(recipe.inputFluid, inputs.getFluids())
-                && matchesOutputs(recipe.outputItem, outputs.getItems())
-                && matchesHbmFluids(recipe.outputFluid, outputs.getFluids());
+                && matchesHbmFluids(recipe.inputFluid, inputs.getFluids());
     }
 
     static boolean matchesAStacks(AStack[] expected, List<ItemStack> actual) {
@@ -31,34 +28,6 @@ final class PatternMatcher {
         if (expected != null) {
             for (AStack ingredient : expected) {
                 if (!consume(pool, ingredient)) {
-                    return false;
-                }
-            }
-        }
-        return isEmpty(pool);
-    }
-
-    static boolean matchesOutputs(IOutput[] expected, List<ItemStack> actual) {
-        List<ItemStack> pool = copyItems(actual);
-        if (expected != null) {
-            for (IOutput output : expected) {
-                if (output == null || output.possibleMultiOutput()) {
-                    return false;
-                }
-                ItemStack single = output.getSingle();
-                if (single == null || !consumeExact(pool, single)) {
-                    return false;
-                }
-            }
-        }
-        return isEmpty(pool);
-    }
-
-    static boolean matchesExactItems(ItemStack[] expected, List<ItemStack> actual) {
-        List<ItemStack> pool = copyItems(actual);
-        if (expected != null) {
-            for (ItemStack stack : expected) {
-                if (stack == null || !consumeExact(pool, stack)) {
                     return false;
                 }
             }
@@ -116,17 +85,6 @@ final class PatternMatcher {
             }
         }
         return null;
-    }
-
-    private static boolean consumeExact(List<ItemStack> pool, ItemStack expected) {
-        for (ItemStack candidate : pool) {
-            if (candidate.stackSize >= expected.stackSize && candidate.isItemEqual(expected)
-                    && ItemStack.areItemStackTagsEqual(candidate, expected)) {
-                candidate.stackSize -= expected.stackSize;
-                return true;
-            }
-        }
-        return false;
     }
 
     private static boolean consumeFluid(List<FluidStack> pool, com.hbm.inventory.FluidStack expected) {

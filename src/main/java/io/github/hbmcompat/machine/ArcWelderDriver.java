@@ -27,12 +27,11 @@ public final class ArcWelderDriver extends AbstractHbmMachineDriver {
     @Override
     public HbmRecipeMatch match(ICraftingPatternDetails details) {
         PatternStacks inputs = PatternStacks.inputs(details);
-        PatternStacks outputs = PatternStacks.outputs(details);
+        if (!inputs.isValid()) return null;
         ArcWelderRecipe found = null;
         for (ArcWelderRecipe recipe : ArcWelderRecipes.recipes) {
             if (PatternMatcher.matchesAStacks(recipe.ingredients, inputs.getItems())
-                    && PatternMatcher.matchesSingleHbmFluid(recipe.fluid, inputs.getFluids())
-                    && matchSingleOutput(recipe.output, outputs)) {
+                    && PatternMatcher.matchesSingleHbmFluid(recipe.fluid, inputs.getFluids())) {
                 if (found != null) {
                     return null;
                 }

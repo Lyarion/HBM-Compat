@@ -276,8 +276,4 @@ abstract class AbstractHbmMachineDriver implements IHbmMachineDriver {
         return false;
     }
 
-    protected boolean matchSingleOutput(ItemStack output, PatternStacks outputs) {
-        return output != null && PatternMatcher.matchesExactItems(new ItemStack[] { output }, outputs.getItems())
-                && outputs.getFluids().isEmpty();
-    }
 }
