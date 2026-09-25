@@ -17,7 +17,6 @@ import appeng.api.networking.ticking.TickRateModulation;
 import appeng.api.storage.IMEMonitor;
 import appeng.api.storage.data.IAEFluidStack;
 import appeng.util.item.AEFluidStack;
-import io.github.hbmcompat.HbmCompat;
 import io.github.hbmcompat.client.CompatTextures;
 import io.github.hbmcompat.fluid.HbmForgeFluidRegistry;
 import io.github.hbmcompat.machine.HbmFluidAccess;
@@ -38,7 +37,7 @@ public final class PartHbmFluidImportBus extends PartFluidImportBus {
 
     // Thin diagnostic wrapper over the AE2 base doBusWork(). Reports which gate the
     // tick reached (inactive / chunk-unloaded / structurally unusable target / no tank
-    // available right now / attempting) only when -Dhbmcompat.debugBus=true. The base
+    // available right now / attempting) when logging or chat diagnostics are enabled. The base
     // loop then calls our overridden getTarget()/importStuff() below to do the actual
     // transfer.
     @Override
@@ -55,14 +54,14 @@ public final class PartHbmFluidImportBus extends PartFluidImportBus {
         // SLOWER is bounded by TickRates.ImportBus (max 40 ticks), and this early-out is
         // only a driver lookup plus an array-length check, so idling here is cheap.
         if (getProxy().isActive() && canDoBusWork() && !HbmFluidAccess.hasSource(resolveTarget())) {
-            if (HbmCompat.DEBUG_BUS) {
+            if (BusDiagnostics.enabled()) {
                 diag.report(self, "no fluid source tank available right now "
                         + "(storage tank not in send/both mode, or all output tanks empty/pressurized); polling");
             }
             return TickRateModulation.SLOWER;
         }
 
-        if (HbmCompat.DEBUG_BUS) {
+        if (BusDiagnostics.enabled()) {
             if (!getProxy().isActive()) {
                 diag.report(self, "gate: proxy inactive (no channel/power?)");
             } else if (!canDoBusWork()) {

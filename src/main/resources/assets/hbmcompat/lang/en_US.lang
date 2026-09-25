@@ -3,3 +3,20 @@ item.hbm_fluid_import_bus.name=ME HBM Fluid Import Bus
 item.hbm_fluid_export_bus.name=ME HBM Fluid Export Bus
 tooltip.hbmcompat.hbm_machine=HBM machine: %s
 tooltip.hbmcompat.hbm_recipe=HBM recipe: %s
+hbmcompat.factory.title=Factory recipe allocation
+hbmcompat.factory.parallel.short=P
+hbmcompat.factory.variety.short=V
+hbmcompat.factory.parallel=Parallel first: the same recipe may use all four lanes.
+hbmcompat.factory.variety=Variety first: at most one active lane per recipe.
+hbmcompat.factory.switch.parallel=Click to switch to parallel first.
+hbmcompat.factory.switch.variety=Click to switch to variety first.
+hbmcompat.factory.independent=Applies to this adapter only; existing jobs are unchanged.
+
+item.auto_extract_card.name=Auto Extraction Card
+hbmcompat.auto_extract.description=Returns all machine item and fluid outputs to the ME network.
+hbmcompat.auto_extract.limit=ME-HBM Processing Adapter upgrade (maximum 1).
+
+hbmcompat.command.usage=Usage: /hbmc debug
+hbmcompat.command.player_only=This command can only be used by a player.
+hbmcompat.debug.enabled=[HBMC] Debug mode enabled.
+hbmcompat.debug.disabled=[HBMC] Debug mode disabled.

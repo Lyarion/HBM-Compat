@@ -3,6 +3,7 @@ package io.github.hbmcompat.part;
 import net.minecraft.tileentity.TileEntity;
 
 import io.github.hbmcompat.HbmCompat;
+import io.github.hbmcompat.debug.DebugChat;
 
 /**
  * Per-gate fluid-bus diagnostics. Each bus instance holds one of these and calls
@@ -10,7 +11,7 @@ import io.github.hbmcompat.HbmCompat;
  * tick loop. To avoid flooding the log at bus tick rate, a line is only emitted
  * when the reason string changes from the previous tick for that same bus.
  *
- * Entirely inert unless {@code -Dhbmcompat.debugBus=true} is on the JVM args.
+ * Enabled by the JVM log flag or a player chat subscription.
  */
 public final class BusDiagnostics {
 
@@ -21,11 +22,16 @@ public final class BusDiagnostics {
         this.label = label;
     }
 
+    public static boolean enabled() {
+        return HbmCompat.DEBUG_BUS || DebugChat.SUBSCRIPTIONS.active();
+    }
+
     /**
      * @param self   the bus host tile (for coordinates); may be null
      * @param reason short description of the current gate/outcome
      */
     public void report(TileEntity self, String reason) {
+        DebugChat.report(self, label + ":" + System.identityHashCode(this), "bus:" + label, reason);
         if (!HbmCompat.DEBUG_BUS) {
             return;
         }

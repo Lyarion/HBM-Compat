@@ -3,3 +3,20 @@ item.hbm_fluid_import_bus.name=ME HBM 流体输入总线
 item.hbm_fluid_export_bus.name=ME HBM 流体输出总线
 tooltip.hbmcompat.hbm_machine=HBM 机器：%s
 tooltip.hbmcompat.hbm_recipe=HBM 配方：%s
+hbmcompat.factory.title=工厂配方分配
+hbmcompat.factory.parallel.short=并
+hbmcompat.factory.variety.short=类
+hbmcompat.factory.parallel=并行优先：同一配方可占用全部四个通道。
+hbmcompat.factory.variety=种类优先：同一配方最多占用一个加工中或待加工通道。
+hbmcompat.factory.switch.parallel=点击切换为并行优先。
+hbmcompat.factory.switch.variety=点击切换为种类优先。
+hbmcompat.factory.independent=仅设置当前适配器；不改变已经投放的任务。
+
+item.auto_extract_card.name=自动提取卡
+hbmcompat.auto_extract.description=自动将机器的全部物品和流体产物回收到 ME 网络。
+hbmcompat.auto_extract.limit=安装于 ME-HBM 样板适配器升级槽，最多 1 张。
+
+hbmcompat.command.usage=用法：/hbmc debug
+hbmcompat.command.player_only=此命令只能由玩家执行。
+hbmcompat.debug.enabled=[HBMC] 调试模式已开启。
+hbmcompat.debug.disabled=[HBMC] 调试模式已关闭。

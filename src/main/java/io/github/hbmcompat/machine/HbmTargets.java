@@ -1,8 +1,12 @@
 package io.github.hbmcompat.machine;
 
+import java.util.HashSet;
+import java.util.Set;
+
 import net.minecraft.block.Block;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.world.World;
+import net.minecraftforge.common.util.ForgeDirection;
 
 import com.hbm.blocks.BlockDummyable;
 
@@ -37,11 +41,21 @@ public final class HbmTargets {
 
         Block block = world.getBlock(x, y, z);
         if (block instanceof BlockDummyable) {
-            int[] core = ((BlockDummyable) block).findCore(world, x, y, z);
-            if (core == null) {
-                return null;
+            // Same direction walk as BlockDummyable.findCore, with a loaded check before
+            // every access (including intermediate dummy segments across chunk boundaries).
+            Set<String> visited = new HashSet<String>();
+            while (world.blockExists(x, y, z) && world.getBlock(x, y, z) == block) {
+                if (!visited.add(x + ":" + y + ":" + z)) return null;
+                int metadata = world.getBlockMetadata(x, y, z);
+                if (metadata >= BlockDummyable.extra) metadata -= BlockDummyable.extra;
+                ForgeDirection direction = ForgeDirection.getOrientation(metadata);
+                if (direction == ForgeDirection.UNKNOWN) return world.getTileEntity(x, y, z);
+                direction = direction.getOpposite();
+                x += direction.offsetX;
+                y += direction.offsetY;
+                z += direction.offsetZ;
             }
-            return world.getTileEntity(core[0], core[1], core[2]);
+            return null;
         }
 
         return world.getTileEntity(x, y, z);

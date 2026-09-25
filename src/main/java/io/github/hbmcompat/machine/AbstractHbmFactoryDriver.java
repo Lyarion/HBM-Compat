@@ -55,8 +55,27 @@ abstract class AbstractHbmFactoryDriver extends AbstractHbmMachineDriver {
 
     @Override
     public final boolean push(TileEntity tile, HbmRecipeMatch match, PatternStacks suppliedInputs) {
+        return push(tile, match, suppliedInputs, FactoryAllocationMode.PARALLEL_FIRST);
+    }
+
+    @Override
+    public final boolean isFactory() { return true; }
+
+    @Override
+    public final boolean push(TileEntity tile, HbmRecipeMatch match, PatternStacks suppliedInputs,
+            FactoryAllocationMode mode) {
         IInventory inventory = (IInventory) tile;
         GenericRecipe recipe = (GenericRecipe) match.getRecipe();
+
+        if (mode == FactoryAllocationMode.VARIETY_FIRST) {
+            for (ModuleMachineBase module : getModules(tile)) {
+                if (module != null && recipe.getInternalName().equals(module.getRecipeName())
+                        && laneHasPendingInput(inventory, module)) {
+                    AdapterDiagnostics.report(tile, "variety-first: this recipe already occupies an active lane");
+                    return false;
+                }
+            }
+        }
 
         if (!isAutoSwitchStable(tile, recipe, getRecipeSet(), suppliedInputs)) {
             return false;

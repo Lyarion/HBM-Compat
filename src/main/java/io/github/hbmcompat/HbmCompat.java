@@ -33,6 +33,9 @@ import cpw.mods.fml.common.event.FMLPreInitializationEvent;
                 + "required-after:ae2fc@[1.5.99-gtnh,);after:bobfluidtranslator")
 public final class HbmCompat {
 
+    @Mod.Instance("hbmcompat")
+    public static HbmCompat instance;
+
     public static final String MODID = "hbmcompat";
     public static final String NAME = "HBM Compat";
     public static final Logger LOG = LogManager.getLogger(MODID);
@@ -61,7 +64,11 @@ public final class HbmCompat {
     @Mod.EventHandler
     public void preInit(FMLPreInitializationEvent event) {
         CompatConfig.load(event.getSuggestedConfigurationFile());
+        io.github.hbmcompat.network.FactoryModeNetwork.init();
+        cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new io.github.hbmcompat.debug.DebugChat());
         ModContent.preInit();
+        cpw.mods.fml.common.network.NetworkRegistry.INSTANCE.registerGuiHandler(
+                this, new io.github.hbmcompat.ae2.AdapterGuiHandler());
         proxy.preInit();
     }
 
@@ -83,4 +90,17 @@ public final class HbmCompat {
         HbmForgeContainerBridge.registerHbmContainersInForge();
         proxy.postInit();
     }
+    @Mod.EventHandler
+    public void serverStarting(cpw.mods.fml.common.event.FMLServerStartingEvent event) {
+        io.github.hbmcompat.debug.DebugChat.SUBSCRIPTIONS.clear();
+        io.github.hbmcompat.machine.AdapterDiagnostics.clear();
+        event.registerServerCommand(new io.github.hbmcompat.debug.HbmcCommand());
+    }
+
+    @Mod.EventHandler
+    public void serverStopped(cpw.mods.fml.common.event.FMLServerStoppedEvent event) {
+        io.github.hbmcompat.debug.DebugChat.SUBSCRIPTIONS.clear();
+        io.github.hbmcompat.machine.AdapterDiagnostics.clear();
+    }
+
 }

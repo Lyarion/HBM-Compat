@@ -16,6 +16,12 @@ public interface IHbmMachineDriver {
 
     boolean push(TileEntity tile, HbmRecipeMatch match, PatternStacks suppliedInputs);
 
+    default boolean isFactory() { return false; }
+
+    default boolean push(TileEntity tile, HbmRecipeMatch match, PatternStacks inputs, FactoryAllocationMode mode) {
+        return push(tile, match, inputs);
+    }
+
     com.hbm.inventory.fluid.tank.FluidTank[] getInputTanks(TileEntity tile);
 
     int[] getOutputSlots(TileEntity tile);

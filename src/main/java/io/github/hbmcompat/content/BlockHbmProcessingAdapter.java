@@ -14,10 +14,10 @@ import appeng.block.AEBaseTileBlock;
 import appeng.core.features.AEFeature;
 import appeng.core.features.ActivityState;
 import appeng.core.features.BlockStackSrc;
-import appeng.core.sync.GuiBridge;
 import appeng.tile.AEBaseTile;
 import appeng.util.Platform;
 import io.github.hbmcompat.HbmCompat;
+import io.github.hbmcompat.ae2.AdapterGuiHandler;
 import io.github.hbmcompat.ae2.TileHbmAdapter;
 
 public final class BlockHbmProcessingAdapter extends AEBaseTileBlock {
@@ -59,7 +59,7 @@ public final class BlockHbmProcessingAdapter extends AEBaseTileBlock {
             return false;
         }
         if (Platform.isServer()) {
-            Platform.openGUI(player, tile, ForgeDirection.getOrientation(facing), GuiBridge.GUI_INTERFACE);
+            AdapterGuiHandler.open(player, tile);
         }
         return true;
     }

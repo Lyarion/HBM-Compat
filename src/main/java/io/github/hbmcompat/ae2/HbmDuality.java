@@ -1,29 +1,139 @@
 package io.github.hbmcompat.ae2;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import net.minecraft.inventory.IInventory;
 import net.minecraft.inventory.InventoryCrafting;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraftforge.common.util.ForgeDirection;
+import net.minecraftforge.fluids.Fluid;
+import net.minecraftforge.fluids.FluidStack;
 
 import appeng.api.config.LockCraftingMode;
 import appeng.api.implementations.ICraftingPatternItem;
+import appeng.api.networking.IGridNode;
 import appeng.api.networking.crafting.ICraftingPatternDetails;
+import appeng.api.networking.energy.IEnergyGrid;
+import appeng.api.networking.security.MachineSource;
+import appeng.api.networking.ticking.TickRateModulation;
+import appeng.api.storage.IMEMonitor;
+import appeng.api.storage.data.IAEFluidStack;
+import appeng.api.storage.data.IAEItemStack;
 import appeng.helpers.DualityInterface;
 import appeng.helpers.IInterfaceHost;
 import appeng.me.GridAccessException;
 import appeng.me.helpers.AENetworkProxy;
+import appeng.tile.inventory.InvOperation;
+import appeng.util.Platform;
+import appeng.util.item.AEFluidStack;
+import appeng.util.item.AEItemStack;
+
+import io.github.hbmcompat.content.ItemAutoExtractCard;
+import io.github.hbmcompat.fluid.HbmForgeFluidRegistry;
 import io.github.hbmcompat.machine.AdapterDiagnostics;
+import io.github.hbmcompat.machine.FactoryAllocationMode;
 import io.github.hbmcompat.machine.HbmMachineDrivers;
 import io.github.hbmcompat.machine.HbmRecipeMatch;
 import io.github.hbmcompat.machine.HbmTargets;
 import io.github.hbmcompat.machine.IHbmMachineDriver;
+import io.github.hbmcompat.machine.OutputRecovery;
 import io.github.hbmcompat.machine.PatternStacks;
 import io.github.hbmcompat.pattern.HbmPatternMetadata;
 
 public final class HbmDuality extends DualityInterface {
 
     private final IInterfaceHost host;
+    private FactoryAllocationMode allocationMode = FactoryAllocationMode.PARALLEL_FIRST;
+
+    public boolean hasAutoExtractCard() {
+        return ItemAutoExtractCard.isInstalled(getUpgrades());
+    }
+
+    @Override
+    protected boolean hasWorkToDo() {
+        // HBM does not notify AE2 when output slots/tanks fill. Poll even with no pending crafting task.
+        // This also covers the parent's explicit sleep decisions in readConfig/onChangeInventory.
+        return hasAutoExtractCard() || super.hasWorkToDo();
+    }
+
+    @Override
+    public void onChangeInventory(IInventory inventory, int slot, InvOperation operation,
+            ItemStack removed, ItemStack added) {
+        super.onChangeInventory(inventory, slot, operation, removed, added);
+        if (inventory == getUpgrades()) {
+            try {
+                gridProxy.getTick().alertDevice(gridProxy.getNode());
+            } catch (GridAccessException ignored) {
+                // Initial load or disconnected grid: getTickingRequest supplies the state on rejoin.
+            }
+        }
+    }
+
+    @Override
+    public TickRateModulation tickingRequest(IGridNode node, int ticksSinceLastCall) {
+        TickRateModulation original = super.tickingRequest(node, ticksSinceLastCall);
+        if (!hasAutoExtractCard() || !gridProxy.isActive()) return original;
+        try {
+            final IEnergyGrid energy = gridProxy.getEnergy();
+            final IMEMonitor<IAEItemStack> items = gridProxy.getStorage().getItemInventory();
+            final IMEMonitor<IAEFluidStack> fluids = gridProxy.getStorage().getFluidInventory();
+            final MachineSource source = new MachineSource(host);
+            List<TileEntity> targets = new ArrayList<TileEntity>();
+            for (ForgeDirection direction : host.getTargets()) targets.add(target(direction));
+            boolean worked = OutputRecovery.recover(targets, HbmMachineDrivers::forTile,
+                    HbmForgeFluidRegistry::getForgeFluid, new OutputRecovery.Sink() {
+                        @Override public int insertItem(ItemStack offered) {
+                            if (items == null || !gridProxy.isActive()) return 0;
+                            IAEItemStack remainder = Platform.poweredInsert(energy, items,
+                                    AEItemStack.create(offered), source);
+                            return offered.stackSize - (remainder == null ? 0 : (int) remainder.getStackSize());
+                        }
+                        @Override public int insertFluid(Fluid fluid, int offered) {
+                            if (fluids == null || !gridProxy.isActive()) return 0;
+                            IAEFluidStack remainder = Platform.poweredInsert(energy, fluids,
+                                    AEFluidStack.create(new FluidStack(fluid, offered)), source);
+                            return offered - (remainder == null ? 0 : (int) remainder.getStackSize());
+                        }
+                    });
+            if (worked) return TickRateModulation.FASTER;
+        } catch (GridAccessException ignored) {
+            // Nothing has been removed from a machine before acquiring the grid services.
+        }
+        return original == TickRateModulation.SLEEP ? TickRateModulation.SLOWER : original;
+    }
+
+    public FactoryAllocationMode getAllocationMode() { return allocationMode; }
+
+    public void setAllocationMode(FactoryAllocationMode mode) {
+        allocationMode = mode;
+        getTile().markDirty();
+        try {
+            gridProxy.getTick().alertDevice(gridProxy.getNode());
+        } catch (GridAccessException ignored) {}
+    }
+
+    public boolean hasFactoryTarget() {
+        for (ForgeDirection direction : host.getTargets()) {
+            IHbmMachineDriver driver = HbmMachineDrivers.forTile(target(direction));
+            if (driver != null && driver.isFactory()) return true;
+        }
+        return false;
+    }
+
+    @Override
+    public void writeToNBT(NBTTagCompound data) {
+        super.writeToNBT(data);
+        allocationMode.write(data);
+    }
+
+    @Override
+    public void readFromNBT(NBTTagCompound data) {
+        super.readFromNBT(data);
+        allocationMode = FactoryAllocationMode.read(data);
+    }
 
     public HbmDuality(AENetworkProxy networkProxy, IInterfaceHost host) {
         super(networkProxy, host);
@@ -112,7 +222,7 @@ public final class HbmDuality extends DualityInterface {
                 }
                 continue;
             }
-            if (driver.push(target, match, suppliedInputs)) {
+            if (driver.push(target, match, suppliedInputs, allocationMode)) {
                 HbmPatternMetadata.write(encodedPattern, match);
                 resetCraftingLock();
                 AdapterDiagnostics.reset(getTile());
@@ -120,7 +230,7 @@ public final class HbmDuality extends DualityInterface {
                     gridProxy.getTick().alertDevice(gridProxy.getNode());
                 } catch (GridAccessException ignored) {
                     // The inputs are already committed to the machine; nothing more to do.
-                    // Outputs are pulled back by external buses/pipes, not by this adapter.
+                    // An installed extraction card will poll again when the grid becomes available.
                 }
                 return true;
             }
@@ -162,10 +272,9 @@ public final class HbmDuality extends DualityInterface {
 
         // Not busy iff at least one target can take a job right now, i.e. it is not
         // mid-cycle and its inputs are not still pending. Output backlog is
-        // deliberately NOT considered: this adapter never pulls outputs back (external
-        // buses/pipes do), so gating on a drained output would wedge the adapter busy
-        // forever. AE2's BLOCK/SMART_BLOCK settings are intentionally not honoured here
-        // for the same reason -- see HbmBlockingButtonHider for the GUI side.
+        // deliberately NOT considered: extraction is optional, and external buses/pipes
+        // may also drain outputs. AE2's BLOCK/SMART_BLOCK settings remain ignored;
+        // see HbmBlockingButtonHider for the GUI side.
         for (ForgeDirection direction : host.getTargets()) {
             TileEntity target = target(direction);
             IHbmMachineDriver driver = HbmMachineDrivers.forTile(target);

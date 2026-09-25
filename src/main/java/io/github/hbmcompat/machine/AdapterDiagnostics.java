@@ -11,6 +11,7 @@ import net.minecraftforge.fluids.FluidStack;
 import com.hbm.inventory.RecipesCommon.AStack;
 
 import io.github.hbmcompat.HbmCompat;
+import io.github.hbmcompat.debug.DebugChat;
 
 /**
  * Per-adapter push diagnostics. {@link io.github.hbmcompat.ae2.HbmDuality#pushPattern} and the
@@ -24,7 +25,7 @@ import io.github.hbmcompat.HbmCompat;
  * {@link HbmMachineDrivers} are shared singletons and cannot hold per-adapter state. Server ticks
  * are single-threaded, so the plain HashMap is safe here.
  *
- * <p>Entirely inert unless {@code -Dhbmcompat.debugAdapter=true} is on the JVM args.
+ * <p>Enabled by the JVM log flag or a player chat subscription.
  */
 public final class AdapterDiagnostics {
 
@@ -34,7 +35,7 @@ public final class AdapterDiagnostics {
 
     /** True when the debug flag is on. Guard expensive reason-string building with this. */
     public static boolean enabled() {
-        return HbmCompat.DEBUG_ADAPTER;
+        return HbmCompat.DEBUG_ADAPTER || DebugChat.SUBSCRIPTIONS.active();
     }
 
     /**
@@ -42,10 +43,11 @@ public final class AdapterDiagnostics {
      * @param reason short description of the gate that rejected the push
      */
     public static void report(TileEntity self, String reason) {
+        DebugChat.report(self, "push", "push", reason);
         if (!HbmCompat.DEBUG_ADAPTER) {
             return;
         }
-        String where = self == null ? "?" : (self.xCoord + "," + self.yCoord + "," + self.zCoord);
+        String where = logKey(self);
         if (reason.equals(LAST_REASON.get(where))) {
             return;
         }
@@ -58,10 +60,18 @@ public final class AdapterDiagnostics {
      * the previous reason. Called on a successful push: the next failure after a good run is news.
      */
     public static void reset(TileEntity self) {
+        DebugChat.reset(self, "push");
         if (!HbmCompat.DEBUG_ADAPTER || self == null) {
             return;
         }
-        LAST_REASON.remove(self.xCoord + "," + self.yCoord + "," + self.zCoord);
+        LAST_REASON.remove(logKey(self));
+    }
+
+    public static void clear() { LAST_REASON.clear(); }
+
+    private static String logKey(TileEntity self) {
+        return (self == null || self.getWorldObj() == null ? "?" : self.getWorldObj().provider.dimensionId)
+                + ":" + DebugChat.position(self);
     }
 
     /** "4xitem.foo, 1xitem.bar" — the items AE2 actually handed us. */

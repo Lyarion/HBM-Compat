@@ -15,10 +15,15 @@ public final class ModContent {
     public static BlockHbmProcessingAdapter processingAdapter;
     public static ItemHbmFluidImportBus fluidImportBus;
     public static ItemHbmFluidExportBus fluidExportBus;
+    public static ItemAutoExtractCard autoExtractCard;
 
     private ModContent() {}
 
     public static void preInit() {
+        autoExtractCard = new ItemAutoExtractCard();
+        autoExtractCard.setCreativeTab(CreativeTabs.tabRedstone);
+        GameRegistry.registerItem(autoExtractCard, ItemAutoExtractCard.REGISTRY_NAME, HbmCompat.MODID);
+
         processingAdapter = new BlockHbmProcessingAdapter();
         processingAdapter.setCreativeTab(CreativeTabs.tabRedstone);
         GameRegistry.registerBlock(
