@@ -13,10 +13,9 @@ import io.github.hbmcompat.ae2.TileHbmAdapter;
  * Hides the BLOCK / SMART_BLOCK buttons on the HBM processing adapter's GUI.
  *
  * <p>The adapter opens AE2's stock {@code GuiBridge.GUI_INTERFACE}, and {@link GuiInterface}
- * unconditionally adds both blocking toggles at the top-left. The adapter no longer implements
- * blocking (an HBM machine keeps its products in output slots/tanks that this adapter never drains,
- * so a "fully drained" gate wedged the adapter busy forever), so the toggles would be dead
- * switches. Both settings stay registered — {@code ContainerInterface} reads them unconditionally
+ * unconditionally adds both blocking toggles at the top-left. The adapter uses its own input-only
+ * feeding gate and factory allocation buttons instead of AE's whole-inventory blocking gate.
+ * Both settings stay registered — {@code ContainerInterface} reads them unconditionally
  * and unregistering would crash — they are merely not shown.
  *
  * <p>Only this adapter's GUI is touched; a real ME Interface keeps its buttons.

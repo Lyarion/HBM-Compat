@@ -19,6 +19,9 @@ import appeng.util.Platform;
 import io.github.hbmcompat.HbmCompat;
 import io.github.hbmcompat.ae2.AdapterGuiHandler;
 import io.github.hbmcompat.ae2.TileHbmAdapter;
+import io.github.hbmcompat.client.RenderHbmAdapter;
+import cpw.mods.fml.relauncher.Side;
+import cpw.mods.fml.relauncher.SideOnly;
 
 public final class BlockHbmProcessingAdapter extends AEBaseTileBlock {
 
@@ -32,6 +35,12 @@ public final class BlockHbmProcessingAdapter extends AEBaseTileBlock {
         isFullSize = true;
         setTileEntity(TileHbmAdapter.class);
         setFeature(EnumSet.of(AEFeature.Core));
+    }
+
+    @Override
+    @SideOnly(Side.CLIENT)
+    protected RenderHbmAdapter getRenderer() {
+        return new RenderHbmAdapter();
     }
 
     @Override

@@ -1,5 +1,7 @@
 package io.github.hbmcompat.machine;
 
+import io.github.hbmcompat.debug.DiagnosticMessage;
+
 import net.minecraft.tileentity.TileEntity;
 
 import com.hbm.inventory.fluid.tank.FluidTank;
@@ -46,7 +48,7 @@ public final class ChemicalPlantDriver extends AbstractHbmMachineDriver {
         TileEntityMachineChemicalPlant machine = (TileEntityMachineChemicalPlant) tile;
         // Busy only while actively processing or with un-consumed inputs pending.
         // Output-slot / output-tank backlog must NOT block new input feeding.
-        return machine.chemplantModule.progress > 0D || hasItems(machine, INPUT_SLOTS);
+        return pending(machine, machine.chemplantModule);
     }
 
     @Override
@@ -55,11 +57,9 @@ public final class ChemicalPlantDriver extends AbstractHbmMachineDriver {
         GenericRecipe recipe = (GenericRecipe) match.getRecipe();
 
         if (recipe.isPooled() && !recipe.isPartOfPool(ItemBlueprints.grabPool(machine.getStackInSlot(1)))) {
-            AdapterDiagnostics.report(
-                    tile,
-                    "recipe " + recipe.getInternalName()
-                            + " is blueprint-pooled and the blueprint in the machine's blueprint slot (slot 1) does not"
-                            + " cover it. Insert the right blueprint.");
+            AdapterDiagnostics.report(tile, DiagnosticMessage.of(
+                    "blueprint_missing", "recipe %s is blueprint-pooled and the blueprint in the machine's blueprint slot (slot 1) "
+                    + "does not cover it. Insert the right blueprint.", recipe.getInternalName()));
             return false;
         }
         if (!isAutoSwitchStable(tile, recipe, ChemicalPlantRecipes.INSTANCE, suppliedInputs)) {
@@ -69,22 +69,9 @@ public final class ChemicalPlantDriver extends AbstractHbmMachineDriver {
             return false;
         }
 
-        // Everything that can fail on the item side is settled before the machine is touched.
-        MachineInputPlan plan = planInputs(
-                tile,
-                machine,
-                INPUT_SLOTS,
-                recipe.inputItem,
-                machine.inputTanks,
-                recipe.inputFluid,
-                suppliedInputs);
-        if (plan == null) {
-            return false;
-        }
 
-        machine.chemplantModule.setRecipe(recipe.getInternalName(), false);
-        machine.chemplantModule.setupTanks(recipe);
-        return commitInputs(plan, tile, machine.inputTanks, recipe.inputFluid);
+        return commitModule(tile, machine.chemplantModule, recipe,
+                planModule(tile, machine.chemplantModule, recipe, suppliedInputs));
     }
 
     @Override

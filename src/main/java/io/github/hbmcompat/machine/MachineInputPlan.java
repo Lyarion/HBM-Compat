@@ -35,7 +35,9 @@ final class MachineInputPlan {
                 return false;
             }
             merged = current.copy();
-            merged.stackSize += addition.stackSize;
+            long amount = (long) merged.stackSize + addition.stackSize;
+            if (amount > Integer.MAX_VALUE) return false;
+            merged.stackSize = (int) amount;
         }
 
         int limit = Math.min(inventory.getInventoryStackLimit(), merged.getMaxStackSize());
@@ -54,6 +56,10 @@ final class MachineInputPlan {
     }
 
     boolean addFluid(FluidTank tank, com.hbm.inventory.FluidStack addition) {
+        return addFluid(tank, addition, tank == null ? 0 : tank.getMaxFill());
+    }
+
+    boolean addFluid(FluidTank tank, com.hbm.inventory.FluidStack addition, int capacity) {
         if (tank == null || addition == null || addition.type == null || addition.type == Fluids.NONE
                 || addition.fill <= 0 || addition.pressure != 0 || tank.getPressure() != 0) {
             return false;
@@ -65,7 +71,7 @@ final class MachineInputPlan {
         if (currentType != Fluids.NONE && currentType != addition.type && currentFill > 0) {
             return false;
         }
-        if (currentFill + addition.fill > tank.getMaxFill()) {
+        if ((long) currentFill + addition.fill > capacity) {
             return false;
         }
 
@@ -92,7 +98,7 @@ final class MachineInputPlan {
         inventory.markDirty();
     }
 
-    private ItemStack plannedSlotValue(int slot) {
+    ItemStack plannedSlotValue(int slot) {
         int index = slots.indexOf(Integer.valueOf(slot));
         if (index >= 0) {
             return slotValues.get(index);

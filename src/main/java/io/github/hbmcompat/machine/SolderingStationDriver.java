@@ -47,7 +47,7 @@ public final class SolderingStationDriver extends AbstractHbmMachineDriver {
         TileEntityMachineSolderingStation machine = (TileEntityMachineSolderingStation) tile;
         // Busy only while actively processing or with un-consumed inputs pending.
         // Output-slot backlog must NOT block new input feeding.
-        return machine.progress > 0 || hasItems(machine, BUSY_INPUT_SLOTS);
+        return machine.progress > 0 || hasItems(machine, BUSY_INPUT_SLOTS) || hasFluids(getInputTanks(tile));
     }
 
     @Override
@@ -57,6 +57,14 @@ public final class SolderingStationDriver extends AbstractHbmMachineDriver {
         com.hbm.inventory.FluidStack[] fluids = recipe.fluid == null ? null
                 : new com.hbm.inventory.FluidStack[] { recipe.fluid };
         FluidTank[] inputTanks = { machine.tank };
+        SolderingRecipe current = SolderingRecipes.getRecipe(snapshot(machine, null, 6));
+        if ((current != null && current != recipe) || (machine.progress > 0 && current != recipe)
+                || !tanksCompatible(tile, inputTanks, fluids)) return false;
+        for (int slot : BUSY_INPUT_SLOTS) {
+            boolean used = false;
+            for (int input : routedSlots(recipe)) if (input == slot) used = true;
+            if (!used && machine.getStackInSlot(slot) != null) return false;
+        }
 
         // This machine has no recipe-selection call, so there is no machine state to mutate before
         // the transfer: plan and commit back to back.
@@ -71,7 +79,8 @@ public final class SolderingStationDriver extends AbstractHbmMachineDriver {
         if (plan == null) {
             return false;
         }
-        return commitInputs(plan, tile, inputTanks, fluids);
+        return SolderingRecipes.getRecipe(snapshot(machine, plan, 6)) == recipe
+                && commitInputs(plan, tile, inputTanks, fluids);
     }
 
     @Override

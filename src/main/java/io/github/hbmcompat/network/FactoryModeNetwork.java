@@ -19,6 +19,7 @@ import io.netty.buffer.ByteBuf;
 import io.github.hbmcompat.ae2.HbmDuality;
 import io.github.hbmcompat.ae2.TileHbmAdapter;
 import io.github.hbmcompat.machine.FactoryAllocationMode;
+import io.github.hbmcompat.machine.FeedingMode;
 
 /** Network threads only enqueue requests; all world access happens on the server tick. */
 public final class FactoryModeNetwork {
@@ -40,7 +41,7 @@ public final class FactoryModeNetwork {
 
     public static class State implements IMessage {
         public int window, x, y, z;
-        public boolean factory, variety;
+        public boolean factory, variety, supported, continuous;
         public State() {}
         public State(int window, TileHbmAdapter tile, boolean factory, boolean variety) {
             this.window = window;
@@ -50,10 +51,12 @@ public final class FactoryModeNetwork {
         @Override public void fromBytes(ByteBuf buf) {
             window = buf.readInt(); x = buf.readInt(); y = buf.readInt(); z = buf.readInt();
             factory = buf.readBoolean(); variety = buf.readBoolean();
+            supported = buf.readBoolean(); continuous = buf.readBoolean();
         }
         @Override public void toBytes(ByteBuf buf) {
             buf.writeInt(window); buf.writeInt(x); buf.writeInt(y); buf.writeInt(z);
             buf.writeBoolean(factory); buf.writeBoolean(variety);
+            buf.writeBoolean(supported); buf.writeBoolean(continuous);
         }
         public boolean matches(Container container, TileHbmAdapter tile) {
             return tile != null && container.windowId == window
@@ -61,19 +64,26 @@ public final class FactoryModeNetwork {
         }
         boolean same(State other) {
             return other != null && window == other.window && x == other.x && y == other.y && z == other.z
-                    && factory == other.factory && variety == other.variety;
+                    && factory == other.factory && variety == other.variety
+                    && supported == other.supported && continuous == other.continuous;
         }
     }
 
     public static final class Request extends State {
-        public boolean change;
+        public int setting; // 0 query, 1 allocation, 2 feeding; unknown values are ignored.
         public Request() {}
         public Request(int window, TileHbmAdapter tile, boolean variety, boolean change) {
             super(window, tile, false, variety);
-            this.change = change;
+            this.setting = change ? 1 : 0;
         }
-        @Override public void fromBytes(ByteBuf buf) { super.fromBytes(buf); change = buf.readBoolean(); }
-        @Override public void toBytes(ByteBuf buf) { super.toBytes(buf); buf.writeBoolean(change); }
+        public static Request feeding(int window, TileHbmAdapter tile, boolean continuous) {
+            Request request = new Request(window, tile, false, false);
+            request.setting = 2;
+            request.continuous = continuous;
+            return request;
+        }
+        @Override public void fromBytes(ByteBuf buf) { super.fromBytes(buf); setting = buf.readUnsignedByte(); }
+        @Override public void toBytes(ByteBuf buf) { super.toBytes(buf); buf.writeByte(setting); }
     }
 
     public static final class RequestHandler implements IMessageHandler<Request, IMessage> {
@@ -109,13 +119,18 @@ public final class FactoryModeNetwork {
         }
         HbmDuality duality = (HbmDuality) tile.getInterfaceDuality();
         boolean factory = duality.hasFactoryTarget();
-        if (request != null && request.change && request.matches(container, tile) && factory
+        boolean supported = duality.hasMachineTarget();
+        if (request != null && request.setting != 0 && request.matches(container, tile)
                 && mayConfigure(tile, player)) {
-            duality.setAllocationMode(request.variety
+            if (request.setting == 1 && factory) duality.setAllocationMode(request.variety
                     ? FactoryAllocationMode.VARIETY_FIRST : FactoryAllocationMode.PARALLEL_FIRST);
+            if (request.setting == 2 && supported) duality.setFeedingMode(request.continuous
+                    ? FeedingMode.CONTINUOUS : FeedingMode.SINGLE_BATCH);
         }
         State state = new State(container.windowId, tile, factory,
                 duality.getAllocationMode() == FactoryAllocationMode.VARIETY_FIRST);
+        state.supported = supported;
+        state.continuous = duality.getFeedingMode() == FeedingMode.CONTINUOUS;
         if (request != null || !state.same(sent.get(player))) {
             CHANNEL.sendTo(state, player);
             sent.put(player, state);

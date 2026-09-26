@@ -1,5 +1,7 @@
 package io.github.hbmcompat.machine;
 
+import io.github.hbmcompat.debug.DiagnosticMessage;
+
 import java.util.List;
 import java.util.Map;
 
@@ -67,28 +69,44 @@ public final class CrystallizerDriver extends AbstractHbmMachineDriver {
     @Override
     public boolean isBusy(TileEntity tile) {
         TileEntityMachineCrystallizer machine = (TileEntityMachineCrystallizer) tile;
-        return machine.progress > 0 || hasItems(machine, INPUT_SLOTS);
+        return machine.progress > 0 || hasItems(machine, INPUT_SLOTS) || hasFluids(getInputTanks(tile));
     }
 
     @Override
     public boolean push(TileEntity tile, HbmRecipeMatch match, PatternStacks suppliedInputs) {
-        if (!suppliedInputs.isValid() || isBusy(tile)) return false;
+        TileEntityMachineCrystallizer machine = (TileEntityMachineCrystallizer) tile;
+        return machine.progress <= 0 && !hasItems(machine, INPUT_SLOTS) && pushInputs(tile, match, suppliedInputs);
+    }
+
+    @Override
+    public boolean push(TileEntity tile, HbmRecipeMatch match, PatternStacks suppliedInputs,
+            FactoryAllocationMode allocation, FeedingMode feeding) {
+        return !isBusy(tile, feeding) && pushInputs(tile, match, suppliedInputs);
+    }
+
+    private boolean pushInputs(TileEntity tile, HbmRecipeMatch match, PatternStacks suppliedInputs) {
+        if (!suppliedInputs.isValid()) return false;
         TileEntityMachineCrystallizer machine = (TileEntityMachineCrystallizer) tile;
         Recipe recipe = (Recipe) match.getRecipe();
         FluidType acid = recipe.fluids[0].type;
         List<ItemStack> assigned = PatternMatcher.assign(recipe.items, suppliedInputs.getItems());
         if (assigned == null || CrystallizerRecipes.getOutput(assigned.get(0), acid) != recipe.source) {
-            AdapterDiagnostics.report(tile, "supplied item selects a different acidizer recipe; check pattern substitution");
+            AdapterDiagnostics.report(tile, DiagnosticMessage.of(
+                    "acidizer_recipe", "supplied item selects a different acidizer recipe; check pattern substitution"));
             return false;
         }
         ItemStack identifier = machine.getStackInSlot(7);
         if (identifier != null && identifier.getItem() instanceof IItemFluidIdentifier
                 && ((IItemFluidIdentifier) identifier.getItem()).getType(null, 0, 0, 0, identifier) != acid) {
             // HBM reapplies this identifier every tick, clearing the tank on a type change.
-            AdapterDiagnostics.report(tile, "acidizer fluid identifier conflicts with the recipe; change or remove it");
+            AdapterDiagnostics.report(tile, DiagnosticMessage.of(
+                    "acidizer_identifier", "acidizer fluid identifier conflicts with the recipe; change or remove it"));
             return false;
         }
         FluidTank[] tanks = getInputTanks(tile);
+        ItemStack current = machine.getStackInSlot(0);
+        if (!tanksCompatible(tile, tanks, recipe.fluids)
+                || (current != null && CrystallizerRecipes.getOutput(current, acid) != recipe.source)) return false;
         MachineInputPlan plan = planInputs(tile, machine, INPUT_SLOTS, recipe.items, tanks,
                 recipe.fluids, suppliedInputs);
         return plan != null && commitInputs(plan, tile, tanks, recipe.fluids);

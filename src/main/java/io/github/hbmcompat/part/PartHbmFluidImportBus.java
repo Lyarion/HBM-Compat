@@ -1,5 +1,7 @@
 package io.github.hbmcompat.part;
 
+import io.github.hbmcompat.debug.DiagnosticMessage;
+
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.IIcon;
@@ -55,23 +57,27 @@ public final class PartHbmFluidImportBus extends PartFluidImportBus {
         // only a driver lookup plus an array-length check, so idling here is cheap.
         if (getProxy().isActive() && canDoBusWork() && !HbmFluidAccess.hasSource(resolveTarget())) {
             if (BusDiagnostics.enabled()) {
-                diag.report(self, "no fluid source tank available right now "
-                        + "(storage tank not in send/both mode, or all output tanks empty/pressurized); polling");
+                diag.report(self, DiagnosticMessage.of(
+                        "source_unavailable", "no fluid source tank available right now (storage tank not in send/both mode, or all output "
+                        + "tanks empty/pressurized); polling"));
             }
             return TickRateModulation.SLOWER;
         }
 
         if (BusDiagnostics.enabled()) {
             if (!getProxy().isActive()) {
-                diag.report(self, "gate: proxy inactive (no channel/power?)");
+                diag.report(self, DiagnosticMessage.of(
+                        "bus_inactive", "gate: proxy inactive (no channel/power?)"));
             } else if (!canDoBusWork()) {
-                diag.report(self, "gate: target chunk not loaded");
+                diag.report(self, DiagnosticMessage.of(
+                        "chunk_unloaded", "gate: target chunk not loaded"));
             } else if (getTarget() == null) {
-                diag.report(self, "gate: target can never be a fluid source "
-                        + "(not an HBM machine/storage core, core unresolved, or machine w/o output tank "
-                        + "e.g. arc welder/soldering station)");
+                diag.report(self, DiagnosticMessage.of(
+                        "source_unsupported", "gate: target can never be a fluid source (not an HBM machine/storage core, core unresolved, "
+                        + "or machine w/o output tank e.g. arc welder/soldering station)"));
             } else {
-                diag.report(self, "ticking: source ok, attempting import");
+                diag.report(self, DiagnosticMessage.of(
+                        "import_attempt", "ticking: source ok, attempting import"));
             }
         }
         return super.doBusWork();

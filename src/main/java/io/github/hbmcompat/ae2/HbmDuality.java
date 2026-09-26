@@ -1,5 +1,7 @@
 package io.github.hbmcompat.ae2;
 
+import io.github.hbmcompat.debug.DiagnosticMessage;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -35,6 +37,7 @@ import io.github.hbmcompat.content.ItemAutoExtractCard;
 import io.github.hbmcompat.fluid.HbmForgeFluidRegistry;
 import io.github.hbmcompat.machine.AdapterDiagnostics;
 import io.github.hbmcompat.machine.FactoryAllocationMode;
+import io.github.hbmcompat.machine.FeedingMode;
 import io.github.hbmcompat.machine.HbmMachineDrivers;
 import io.github.hbmcompat.machine.HbmRecipeMatch;
 import io.github.hbmcompat.machine.HbmTargets;
@@ -47,6 +50,24 @@ public final class HbmDuality extends DualityInterface {
 
     private final IInterfaceHost host;
     private FactoryAllocationMode allocationMode = FactoryAllocationMode.PARALLEL_FIRST;
+    private FeedingMode feedingMode = FeedingMode.SINGLE_BATCH;
+
+    public FeedingMode getFeedingMode() { return feedingMode; }
+
+    public void setFeedingMode(FeedingMode mode) {
+        feedingMode = mode;
+        getTile().markDirty();
+        try {
+            gridProxy.getTick().alertDevice(gridProxy.getNode());
+        } catch (GridAccessException ignored) {}
+    }
+
+    public boolean hasMachineTarget() {
+        for (ForgeDirection direction : host.getTargets()) {
+            if (HbmMachineDrivers.forTile(target(direction)) != null) return true;
+        }
+        return false;
+    }
 
     public boolean hasAutoExtractCard() {
         return ItemAutoExtractCard.isInstalled(getUpgrades());
@@ -127,12 +148,14 @@ public final class HbmDuality extends DualityInterface {
     public void writeToNBT(NBTTagCompound data) {
         super.writeToNBT(data);
         allocationMode.write(data);
+        feedingMode.write(data);
     }
 
     @Override
     public void readFromNBT(NBTTagCompound data) {
         super.readFromNBT(data);
         allocationMode = FactoryAllocationMode.read(data);
+        feedingMode = FeedingMode.read(data);
     }
 
     public HbmDuality(AENetworkProxy networkProxy, IInterfaceHost host) {
@@ -169,10 +192,9 @@ public final class HbmDuality extends DualityInterface {
 
         PatternStacks suppliedInputs = PatternStacks.fromInventory(table);
         if (!suppliedInputs.isValid()) {
-            AdapterDiagnostics.report(
-                    getTile(),
-                    "AE2 handed over inputs this adapter cannot read (an unsupported stack type, or a"
-                            + " non-ME crafting table). Nothing to push.");
+            AdapterDiagnostics.report(getTile(), DiagnosticMessage.of(
+                    "unreadable_inputs", "AE2 handed over inputs this adapter cannot read (an unsupported stack type, or a non-ME "
+                    + "crafting table). Nothing to push."));
             return false;
         }
 
@@ -183,9 +205,9 @@ public final class HbmDuality extends DualityInterface {
         // Why the scan found no home for this pattern. Only the last direction's reason is kept:
         // with a fixed orientation there is just one target anyway, and reporting every side of an
         // unoriented adapter would bury the useful line.
-        String rejection = diagnose ? "no machine adjacent to this adapter: the targeted side holds no supported"
-                + " HBM machine, or its multiblock core could not be resolved (try breaking and"
-                + " replacing the machine)" : null;
+        DiagnosticMessage rejection = diagnose ? DiagnosticMessage.of(
+                "no_machine", "no machine adjacent to this adapter: the targeted side holds no supported HBM machine, or "
+                + "its multiblock core could not be resolved (try breaking and replacing the machine)") : null;
 
         ItemStack encodedPattern = patternDetails.getPattern();
         for (ForgeDirection direction : host.getTargets()) {
@@ -194,10 +216,10 @@ public final class HbmDuality extends DualityInterface {
             if (driver == null) {
                 continue;
             }
-            if (driver.isBusy(target)) {
+            if (driver.isBusy(target, feedingMode)) {
                 if (diagnose) {
-                    rejection = "machine on the " + direction + " side is busy: it is mid-cycle, or its input"
-                            + " slots still hold un-consumed items";
+                    rejection = DiagnosticMessage.of(
+                            "machine_busy", "machine on the %s side is busy: it is mid-cycle, or its input slots still hold un-consumed items", direction);
                 }
                 continue;
             }
@@ -205,9 +227,10 @@ public final class HbmDuality extends DualityInterface {
             HbmRecipeMatch match = driver.match(patternDetails);
             if (match == null) {
                 if (diagnose) {
-                    rejection = "no unique HBM recipe matches this pattern's inputs on the " + driver.getMachineId()
-                            + ". Input types and amounts must match exactly; pressurised fluids are unsupported. "
-                            + "Multiple recipes with the same inputs are ambiguous; pattern outputs are not used to choose.";
+                    rejection = DiagnosticMessage.of(
+                            "recipe_unmatched", "no unique HBM recipe matches this pattern's inputs on the %s. Input types and amounts must "
+                            + "match exactly; pressurised fluids are unsupported. Multiple recipes with the same inputs are"
+                            + " ambiguous; pattern outputs are not used to choose.", driver.getMachineId());
                 }
                 continue;
             }
@@ -215,14 +238,12 @@ public final class HbmDuality extends DualityInterface {
                 if (diagnose) {
                     // agrees() only returns false when the pattern carries our tag, so it is present.
                     NBTTagCompound tag = encodedPattern.getTagCompound();
-                    rejection = "this pattern is stamped for " + tag.getString(HbmPatternMetadata.MACHINE_KEY) + "/"
-                            + tag.getString(HbmPatternMetadata.RECIPE_KEY) + " but now matches "
-                            + match.getDriver().getMachineId() + "/" + match.getRecipeName()
-                            + ". Re-encode the pattern.";
+                    rejection = DiagnosticMessage.of(
+                            "pattern_changed", "this pattern is stamped for %s/%s but now matches %s/%s. Re-encode the pattern.", tag.getString(HbmPatternMetadata.MACHINE_KEY), tag.getString(HbmPatternMetadata.RECIPE_KEY), match.getDriver().getMachineId(), match.getRecipeName());
                 }
                 continue;
             }
-            if (driver.push(target, match, suppliedInputs, allocationMode)) {
+            if (driver.push(target, match, suppliedInputs, allocationMode, feedingMode)) {
                 HbmPatternMetadata.write(encodedPattern, match);
                 resetCraftingLock();
                 AdapterDiagnostics.reset(getTile());
@@ -244,18 +265,22 @@ public final class HbmDuality extends DualityInterface {
     }
 
     /** Which of the four combined pre-flight conditions rejected the push. */
-    private String preflightReason(ICraftingPatternDetails patternDetails) {
+    private DiagnosticMessage preflightReason(ICraftingPatternDetails patternDetails) {
         if (hasItemsToSend()) {
-            return "the adapter still has items waiting to be sent back into the network";
+            return DiagnosticMessage.of(
+                    "pending_items", "the adapter still has items waiting to be sent back into the network");
         }
         if (!gridProxy.isActive()) {
-            return "the adapter is not active: no channel or no power. Note that the side the adapter"
-                    + " points at cannot carry the ME cable — run the cable to another face.";
+            return DiagnosticMessage.of(
+                    "adapter_inactive", "the adapter is not active: no channel or no power. Note that the side the adapter points at "
+                    + "cannot carry the ME cable — run the cable to another face.");
         }
         if (craftingList == null || !craftingList.contains(patternDetails)) {
-            return "this pattern is not registered on this adapter (its pattern slots do not hold it)";
+            return DiagnosticMessage.of(
+                    "pattern_unregistered", "this pattern is not registered on this adapter (its pattern slots do not hold it)");
         }
-        return "crafting is locked on this adapter: " + getCraftingLockedReason();
+        return DiagnosticMessage.of(
+                "crafting_locked", "crafting is locked on this adapter: %s", getCraftingLockedReason());
     }
 
     @Override
@@ -281,7 +306,7 @@ public final class HbmDuality extends DualityInterface {
             if (driver == null) {
                 continue;
             }
-            if (!driver.isBusy(target)) {
+            if (!driver.isBusy(target, feedingMode)) {
                 return false;
             }
         }

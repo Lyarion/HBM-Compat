@@ -14,9 +14,18 @@ public interface IHbmMachineDriver {
 
     boolean isBusy(TileEntity tile);
 
+    default boolean isBusy(TileEntity tile, FeedingMode mode) {
+        return mode == FeedingMode.SINGLE_BATCH && isBusy(tile);
+    }
+
     boolean push(TileEntity tile, HbmRecipeMatch match, PatternStacks suppliedInputs);
 
     default boolean isFactory() { return false; }
+
+    default boolean push(TileEntity tile, HbmRecipeMatch match, PatternStacks inputs,
+            FactoryAllocationMode allocation, FeedingMode feeding) {
+        return !isBusy(tile, feeding) && push(tile, match, inputs, allocation);
+    }
 
     default boolean push(TileEntity tile, HbmRecipeMatch match, PatternStacks inputs, FactoryAllocationMode mode) {
         return push(tile, match, inputs);

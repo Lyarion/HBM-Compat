@@ -1,5 +1,7 @@
 package io.github.hbmcompat.part;
 
+import io.github.hbmcompat.debug.DiagnosticMessage;
+
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
@@ -61,7 +63,8 @@ public final class PartHbmFluidExportBus extends PartFluidExportBus {
     protected TickRateModulation doBusWork() {
         TileEntity self = getHost().getTile();
         if (!getProxy().isActive() || !canDoBusWork()) {
-            diag.report(self, "idle: proxy inactive or target chunk unloaded");
+            diag.report(self, DiagnosticMessage.of(
+                    "bus_idle", "idle: proxy inactive or target chunk unloaded"));
             return TickRateModulation.IDLE;
         }
 
@@ -73,8 +76,9 @@ public final class PartHbmFluidExportBus extends PartFluidExportBus {
             // Note this guards only the ticking path -- the sleep gate in isSleeping() reaches
             // the same trap via getTarget(), which is why that override is structural-only.
             // SLOWER is bounded by TickRates.ExportBus (max 60 ticks).
-            diag.report(self, "no fluid sink tank at target "
-                    + "(not an HBM machine/storage core, core unresolved, or storage tank not in receive/both mode)");
+            diag.report(self, DiagnosticMessage.of(
+                    "sink_unavailable", "no fluid sink tank at target (not an HBM machine/storage core, core unresolved, or storage "
+                    + "tank not in receive/both mode)"));
             return TickRateModulation.SLOWER;
         }
 
@@ -85,7 +89,7 @@ public final class PartHbmFluidExportBus extends PartFluidExportBus {
             long remainingBudget = calculateAmountToSend();
             boolean moved = false;
             boolean anyConfigured = false;
-            String lastSkip = null;
+            DiagnosticMessage lastSkip = null;
             int slotCount = availableSlots();
             int inspectedSlots = 0;
             SchedulingMode schedulingMode = (SchedulingMode) getConfigManager()
@@ -100,23 +104,24 @@ public final class PartHbmFluidExportBus extends PartFluidExportBus {
                 anyConfigured = true;
                 FluidType hbmFluid = HbmForgeFluidRegistry.getHbmFluid(configured.getFluidStack().getFluid());
                 if (hbmFluid == Fluids.NONE) {
-                    lastSkip = "configured fluid '" + configured.getFluidStack().getFluid().getName()
-                            + "' is not an HBM fluid (no mapping)";
+                    lastSkip = DiagnosticMessage.of(
+                            "fluid_unmapped", "configured fluid '%s' is not an HBM fluid (no mapping)", configured.getFluidStack().getFluid().getName());
                     continue;
                 }
 
                 FluidTank tank = findTank(sinks, hbmFluid);
                 if (tank == null) {
-                    lastSkip = "no input tank already set to " + hbmFluid.getName()
-                            + " (tank full, untyped, typed for another fluid, or pressurized)"
-                            + "; the bus never changes a tank's fluid type, so set it via the"
-                            + " machine's recipe or the tank's own GUI first";
+                    lastSkip = DiagnosticMessage.of(
+                            "tank_unconfigured", "no input tank already set to %s (tank full, untyped, typed for another fluid, or "
+                            + "pressurized); the bus never changes a tank's fluid type, so set it via the machine's recipe "
+                            + "or the tank's own GUI first", hbmFluid.getName());
                     continue;
                 }
                 int free = tank.getMaxFill() - tank.getFill();
                 int requestedAmount = (int) Math.min(remainingBudget, (long) free);
                 if (requestedAmount <= 0) {
-                    lastSkip = "input tank for " + hbmFluid.getName() + " is full";
+                    lastSkip = DiagnosticMessage.of(
+                            "tank_full", "input tank for %s is full", hbmFluid.getName());
                     continue;
                 }
 
@@ -124,7 +129,8 @@ public final class PartHbmFluidExportBus extends PartFluidExportBus {
                 request.setStackSize(requestedAmount);
                 IAEFluidStack extracted = Platform.poweredExtraction(energy, network, request, mySrc);
                 if (extracted == null || extracted.getStackSize() <= 0) {
-                    lastSkip = "ME network has no " + hbmFluid.getName() + " to extract (or no power)";
+                    lastSkip = DiagnosticMessage.of(
+                            "network_empty", "ME network has no %s to extract (or no power)", hbmFluid.getName());
                     continue;
                 }
 
@@ -138,19 +144,23 @@ public final class PartHbmFluidExportBus extends PartFluidExportBus {
             slotScheduler.finishTick(schedulingMode, inspectedSlots, slotCount);
 
             if (moved) {
-                diag.report(self, "OK: exporting fluid into machine input tank");
+                diag.report(self, DiagnosticMessage.of(
+                        "export_success", "OK: exporting fluid into machine input tank"));
                 target.markDirty();
                 return TickRateModulation.FASTER;
             }
             if (!anyConfigured) {
-                diag.report(self, "no fluid configured in bus GUI (nothing to export)");
+                diag.report(self, DiagnosticMessage.of(
+                        "export_unconfigured", "no fluid configured in bus GUI (nothing to export)"));
             } else if (lastSkip != null) {
-                diag.report(self, "no move: " + lastSkip);
+                diag.report(self, lastSkip);
             } else {
-                diag.report(self, "no move: nothing to do");
+                diag.report(self, DiagnosticMessage.of(
+                        "no_work", "no move: nothing to do"));
             }
         } catch (GridAccessException ignored) {
-            diag.report(self, "idle: grid access exception");
+            diag.report(self, DiagnosticMessage.of(
+                    "grid_error", "idle: grid access exception"));
             return TickRateModulation.IDLE;
         }
         return TickRateModulation.SLOWER;

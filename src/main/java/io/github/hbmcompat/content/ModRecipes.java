@@ -5,6 +5,7 @@ import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraftforge.oredict.ShapedOreRecipe;
 
+import com.hbm.items.ItemGenericPart.EnumPartType;
 import com.hbm.items.ModItems;
 import com.hbm.items.machine.ItemCircuit.EnumCircuitType;
 
@@ -14,7 +15,7 @@ import cpw.mods.fml.common.registry.GameRegistry;
 import io.github.hbmcompat.HbmCompat;
 
 /**
- * Vanilla crafting-table recipes for the three items this mod adds.
+ * Vanilla crafting-table recipes for this mod's devices and upgrades.
  *
  * <p>
  * Ingredients are pulled through the ore dictionary where a tag exists (dyeBlue, blockGlass) so any mod's equivalent
@@ -29,6 +30,19 @@ public final class ModRecipes {
         final IMaterials materials = AEApi.instance().definitions().materials();
         final ItemStack annihilationCore = materials.annihilationCore().maybeStack(1).orNull();
         final ItemStack formationCore = materials.formationCore().maybeStack(1).orNull();
+        final ItemStack basicCard = materials.basicCard().maybeStack(1).orNull();
+
+        // basicCard  hydraulicPiston  annihilationCore
+        addRecipe(
+                new ItemStack(ModContent.autoExtractCard),
+                ItemAutoExtractCard.REGISTRY_NAME,
+                "ABC",
+                'A',
+                basicCard,
+                'B',
+                new ItemStack(ModItems.part_generic, 1, EnumPartType.PISTON_HYDRAULIC.ordinal()),
+                'C',
+                annihilationCore);
 
         // hbm:circuit is a multi-item whose meta is the EnumCircuitType ordinal.
         final ItemStack analogCircuit = new ItemStack(ModItems.circuit, 1, EnumCircuitType.ANALOG.ordinal());

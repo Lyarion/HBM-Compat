@@ -3,6 +3,7 @@ package io.github.hbmcompat.part;
 import net.minecraft.tileentity.TileEntity;
 
 import io.github.hbmcompat.HbmCompat;
+import io.github.hbmcompat.debug.DiagnosticMessage;
 import io.github.hbmcompat.debug.DebugChat;
 
 /**
@@ -28,13 +29,14 @@ public final class BusDiagnostics {
 
     /**
      * @param self   the bus host tile (for coordinates); may be null
-     * @param reason short description of the current gate/outcome
+     * @param message localized description of the current gate/outcome
      */
-    public void report(TileEntity self, String reason) {
-        DebugChat.report(self, label + ":" + System.identityHashCode(this), "bus:" + label, reason);
+    public void report(TileEntity self, DiagnosticMessage message) {
+        DebugChat.report(self, label + ":" + System.identityHashCode(this), "bus:" + label, message);
         if (!HbmCompat.DEBUG_BUS) {
             return;
         }
+        String reason = message.toString();
         if (reason.equals(lastReason)) {
             return;
         }

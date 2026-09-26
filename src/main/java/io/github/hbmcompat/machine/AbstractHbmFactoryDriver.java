@@ -16,8 +16,6 @@ import appeng.api.networking.crafting.ICraftingPatternDetails;
 /** Shared four-lane scheduling for HBM's assembly and chemical factories. */
 abstract class AbstractHbmFactoryDriver extends AbstractHbmMachineDriver {
 
-    private static final int NO_LANE = -1;
-
     protected abstract GenericRecipes<? extends GenericRecipe> getRecipeSet();
 
     protected abstract ModuleMachineBase[] getModules(TileEntity tile);
@@ -64,52 +62,59 @@ abstract class AbstractHbmFactoryDriver extends AbstractHbmMachineDriver {
     @Override
     public final boolean push(TileEntity tile, HbmRecipeMatch match, PatternStacks suppliedInputs,
             FactoryAllocationMode mode) {
+        return push(tile, match, suppliedInputs, mode, FeedingMode.SINGLE_BATCH);
+    }
+
+    @Override
+    public final boolean push(TileEntity tile, HbmRecipeMatch match, PatternStacks suppliedInputs,
+            FactoryAllocationMode mode, FeedingMode feeding) {
         IInventory inventory = (IInventory) tile;
         GenericRecipe recipe = (GenericRecipe) match.getRecipe();
-
-        if (mode == FactoryAllocationMode.VARIETY_FIRST) {
-            for (ModuleMachineBase module : getModules(tile)) {
-                if (module != null && recipe.getInternalName().equals(module.getRecipeName())
-                        && laneHasPendingInput(inventory, module)) {
-                    AdapterDiagnostics.report(tile, "variety-first: this recipe already occupies an active lane");
-                    return false;
-                }
-            }
-        }
-
-        if (!isAutoSwitchStable(tile, recipe, getRecipeSet(), suppliedInputs)) {
-            return false;
-        }
-
+        if (!isAutoSwitchStable(tile, recipe, getRecipeSet(), suppliedInputs)) return false;
         ModuleMachineBase[] modules = getModules(tile);
-        String[] rejected = AdapterDiagnostics.enabled() ? new String[modules.length] : null;
-        int selected = selectLane(tile, inventory, modules, recipe, rejected);
-        if (selected == NO_LANE) {
-            if (AdapterDiagnostics.enabled()) {
-                AdapterDiagnostics.report(tile, describeRejections(recipe, rejected));
+        boolean sameActive = false;
+        for (ModuleMachineBase module : modules) {
+            if (module != null && pending(inventory, module)
+                    && recipe.getInternalName().equals(module.getRecipeName())) sameActive = true;
+        }
+        ModuleMachineBase selected = null;
+        MachineInputPlan selectedPlan = null;
+        long best = Long.MAX_VALUE;
+        for (int lane = 0; lane < modules.length; lane++) {
+            ModuleMachineBase module = modules[lane];
+            if (module == null) continue;
+            boolean active = pending(inventory, module);
+            if (active && feeding == FeedingMode.SINGLE_BATCH) continue;
+            if (mode == FactoryAllocationMode.VARIETY_FIRST && sameActive && !active) continue;
+            if (recipe.isPooled() && !recipe.isPartOfPool(
+                    ItemBlueprints.grabPool(inventory.getStackInSlot(getBlueprintSlot(lane))))) continue;
+            MachineInputPlan plan = planModule(tile, module, recipe, suppliedInputs);
+            if (plan == null) continue;
+            long priority = active ? 10L + queuedBatches(inventory, module, recipe)
+                    : lanePriority(inventory, module, recipe);
+            if (priority < best) {
+                best = priority;
+                selected = module;
+                selectedPlan = plan;
             }
-            return false;
         }
+        return selected != null && commitModule(tile, selected, recipe, selectedPlan);
+    }
 
-        ModuleMachineBase module = modules[selected];
-        MachineInputPlan plan = planInputs(
-                tile,
-                inventory,
-                module.inputSlots,
-                recipe.inputItem,
-                module.inputTanks,
-                recipe.inputFluid,
-                suppliedInputs);
-        if (plan == null) {
-            return false;
+    private int queuedBatches(IInventory inventory, ModuleMachineBase module, GenericRecipe recipe) {
+        int batches = Integer.MAX_VALUE;
+        if (recipe.inputItem != null) {
+            for (int i = 0; i < recipe.inputItem.length; i++) {
+                ItemStack stack = inventory.getStackInSlot(module.inputSlots[i]);
+                batches = Math.min(batches, stack == null ? 0 : stack.stackSize / Math.max(1, recipe.inputItem[i].stacksize));
+            }
         }
-
-        // No machine mutation occurs before all four lanes have been inspected and the selected
-        // lane's item/fluid input has been staged. The output-tank guard in selectLane is crucial:
-        // setupTanks clears a tank when a recipe changes its type or no longer uses that tank.
-        module.setRecipe(recipe.getInternalName(), false);
-        module.setupTanks(recipe);
-        return commitInputs(plan, tile, module.inputTanks, recipe.inputFluid);
+        if (recipe.inputFluid != null) {
+            for (int i = 0; i < recipe.inputFluid.length; i++) {
+                batches = Math.min(batches, module.inputTanks[i].getFill() / Math.max(1, recipe.inputFluid[i].fill));
+            }
+        }
+        return batches == Integer.MAX_VALUE ? 0 : batches;
     }
 
     @Override
@@ -142,46 +147,6 @@ abstract class AbstractHbmFactoryDriver extends AbstractHbmMachineDriver {
         return flattenTanks(getModules(tile), false);
     }
 
-    private int selectLane(
-            TileEntity tile,
-            IInventory inventory,
-            ModuleMachineBase[] modules,
-            GenericRecipe recipe,
-            String[] rejected) {
-        int bestLane = NO_LANE;
-        int bestPriority = Integer.MAX_VALUE;
-
-        for (int lane = 0; lane < modules.length; lane++) {
-            ModuleMachineBase module = modules[lane];
-            if (laneHasPendingInput(inventory, module)) {
-                reject(rejected, lane, "busy or holding unconsumed input");
-                continue;
-            }
-
-            ItemStack blueprint = inventory.getStackInSlot(getBlueprintSlot(lane));
-            if (recipe.isPooled() && !recipe.isPartOfPool(ItemBlueprints.grabPool(blueprint))) {
-                reject(rejected, lane, "blueprint does not unlock this recipe");
-                continue;
-            }
-
-            if (!tanksCompatible(tile, module.inputTanks, recipe.inputFluid, false)) {
-                reject(rejected, lane, "input tanks are incompatible with this recipe");
-                continue;
-            }
-
-            if (!tanksCanBeRetypedWithoutLoss(module.outputTanks, recipe.outputFluid)) {
-                reject(rejected, lane, "switching recipe would clear a non-empty output tank");
-                continue;
-            }
-
-            int priority = lanePriority(inventory, module, recipe);
-            if (priority < bestPriority) {
-                bestPriority = priority;
-                bestLane = lane;
-            }
-        }
-        return bestLane;
-    }
 
     private int lanePriority(IInventory inventory, ModuleMachineBase module, GenericRecipe recipe) {
         int readiness = outputsCanAcceptResult(inventory, module, recipe) ? 0 : 3;
@@ -215,7 +180,7 @@ abstract class AbstractHbmFactoryDriver extends AbstractHbmMachineDriver {
                 ItemStack produced = output.getSingle();
                 if (produced == null || current.getItem() != produced.getItem()
                         || current.getItemDamage() != produced.getItemDamage()
-                        || current.stackSize + produced.stackSize > current.getMaxStackSize()) {
+                        || (long) current.stackSize + produced.stackSize > current.getMaxStackSize()) {
                     return false;
                 }
             }
@@ -226,7 +191,7 @@ abstract class AbstractHbmFactoryDriver extends AbstractHbmMachineDriver {
                 return false;
             }
             for (int index = 0; index < recipe.outputFluid.length; index++) {
-                if (recipe.outputFluid[index].fill + module.outputTanks[index].getFill()
+                if ((long) recipe.outputFluid[index].fill + module.outputTanks[index].getFill()
                         > module.outputTanks[index].getMaxFill()) {
                     return false;
                 }
@@ -260,23 +225,4 @@ abstract class AbstractHbmFactoryDriver extends AbstractHbmMachineDriver {
         return result;
     }
 
-    private void reject(String[] rejected, int lane, String reason) {
-        if (rejected != null) {
-            rejected[lane] = reason;
-        }
-    }
-
-    private String describeRejections(GenericRecipe recipe, String[] rejected) {
-        StringBuilder result = new StringBuilder();
-        result.append("no lane in ").append(getFactoryName()).append(" can accept ")
-                .append(recipe.getInternalName()).append(':');
-        for (int lane = 0; lane < rejected.length; lane++) {
-            result.append(" lane ").append(lane + 1).append(" = ")
-                    .append(rejected[lane] == null ? "not usable" : rejected[lane]);
-            if (lane + 1 < rejected.length) {
-                result.append(';');
-            }
-        }
-        return result.toString();
-    }
 }

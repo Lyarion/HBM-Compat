@@ -11,6 +11,7 @@ import net.minecraftforge.fluids.FluidStack;
 import com.hbm.inventory.RecipesCommon.AStack;
 
 import io.github.hbmcompat.HbmCompat;
+import io.github.hbmcompat.debug.DiagnosticMessage;
 import io.github.hbmcompat.debug.DebugChat;
 
 /**
@@ -40,14 +41,15 @@ public final class AdapterDiagnostics {
 
     /**
      * @param self   the adapter tile (for coordinates); may be null
-     * @param reason short description of the gate that rejected the push
+     * @param message localized description of the gate that rejected the push
      */
-    public static void report(TileEntity self, String reason) {
-        DebugChat.report(self, "push", "push", reason);
+    public static void report(TileEntity self, DiagnosticMessage message) {
+        DebugChat.report(self, "push", "push", message);
         if (!HbmCompat.DEBUG_ADAPTER) {
             return;
         }
         String where = logKey(self);
+        String reason = message.toString();
         if (reason.equals(LAST_REASON.get(where))) {
             return;
         }

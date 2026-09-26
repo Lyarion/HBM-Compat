@@ -231,6 +231,21 @@ public class CrystallizerDriverTest {
         assertEquals("crystallizer", driver.getMachineId());
     }
 
+    @Test public void continuousRefillsPartialInputAndKeepsProgressAndOutputs() throws Exception {
+        assertTrue(push());
+        machine.getStackInSlot(0).stackSize = 1;
+        machine.progress = 1;
+        machine.setInventorySlotContents(2, new ItemStack(product, 64));
+        PatternStacks inputs = inputs(2, 500);
+        HbmRecipeMatch match = driver.matchInputs(inputs);
+        assertFalse(driver.push(machine, match, inputs, FactoryAllocationMode.PARALLEL_FIRST, FeedingMode.SINGLE_BATCH));
+        assertTrue(driver.push(machine, match, inputs, FactoryAllocationMode.PARALLEL_FIRST, FeedingMode.CONTINUOUS));
+        assertEquals(3, machine.getStackInSlot(0).stackSize);
+        assertEquals(1000, machine.tank.getFill());
+        assertEquals(1, machine.progress);
+        assertEquals(64, machine.getStackInSlot(2).stackSize);
+    }
+
     @Test public void singleItemCustomRecipeMatches() throws Exception {
         CrystallizerRecipes.registerRecipe(new ComparableStack(ingredient), recipe(1), acid(250));
         PatternStacks inputs = inputs(1, 250);

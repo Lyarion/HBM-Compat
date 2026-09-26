@@ -46,7 +46,7 @@ public final class ArcWelderDriver extends AbstractHbmMachineDriver {
         TileEntityMachineArcWelder machine = (TileEntityMachineArcWelder) tile;
         // Busy only while actively processing or with un-consumed inputs pending.
         // Output-slot backlog must NOT block new input feeding.
-        return machine.progress > 0 || hasItems(machine, INPUT_SLOTS);
+        return machine.progress > 0 || hasItems(machine, INPUT_SLOTS) || hasFluids(getInputTanks(tile));
     }
 
     @Override
@@ -56,6 +56,9 @@ public final class ArcWelderDriver extends AbstractHbmMachineDriver {
         com.hbm.inventory.FluidStack[] fluids = recipe.fluid == null ? null
                 : new com.hbm.inventory.FluidStack[] { recipe.fluid };
         FluidTank[] inputTanks = { machine.tank };
+        ArcWelderRecipe current = ArcWelderRecipes.getRecipe(snapshot(machine, null, 3));
+        if ((current != null && current != recipe) || (machine.progress > 0 && current != recipe)
+                || !tanksCompatible(tile, inputTanks, fluids)) return false;
 
         // This machine has no recipe-selection call, so there is no machine state to mutate before
         // the transfer: plan and commit back to back.
@@ -70,7 +73,8 @@ public final class ArcWelderDriver extends AbstractHbmMachineDriver {
         if (plan == null) {
             return false;
         }
-        return commitInputs(plan, tile, inputTanks, fluids);
+        return ArcWelderRecipes.getRecipe(snapshot(machine, plan, 3)) == recipe
+                && commitInputs(plan, tile, inputTanks, fluids);
     }
 
     @Override

@@ -14,8 +14,7 @@ public final class ItemAutoExtractCard extends Item {
 
     public ItemAutoExtractCard() {
         setUnlocalizedName(REGISTRY_NAME);
-        // Reuse AE2's card artwork without copying assets or requiring a resource pack.
-        setTextureName("appliedenergistics2:ItemMaterial.CardInverter");
+        setTextureName("hbmcompat:auto_extract_card");
     }
 
     public static boolean isCard(ItemStack stack) {

@@ -1,5 +1,7 @@
 package io.github.hbmcompat.machine;
 
+import io.github.hbmcompat.debug.DiagnosticMessage;
+
 import java.util.Collections;
 import java.util.List;
 
@@ -13,6 +15,62 @@ import com.hbm.inventory.recipes.loader.GenericRecipe;
 import com.hbm.inventory.recipes.loader.GenericRecipes;
 
 abstract class AbstractHbmMachineDriver implements IHbmMachineDriver {
+
+    protected ItemStack[] snapshot(IInventory inventory, MachineInputPlan plan, int count) {
+        ItemStack[] result = new ItemStack[count];
+        for (int i = 0; i < count; i++) {
+            ItemStack stack = plan == null ? inventory.getStackInSlot(i) : plan.plannedSlotValue(i);
+            result[i] = stack == null ? null : stack.copy();
+        }
+        return result;
+    }
+
+    protected boolean pending(IInventory inventory, com.hbm.module.machine.ModuleMachineBase module) {
+        return module.progress > 0 || hasItems(inventory, module.inputSlots) || hasFluids(module.inputTanks);
+    }
+
+    /** Stage a whole batch before changing recipe, tank configuration, or inventory. */
+    protected MachineInputPlan planModule(TileEntity tile, com.hbm.module.machine.ModuleMachineBase module,
+            GenericRecipe recipe, PatternStacks inputs) {
+        IInventory inventory = (IInventory) tile;
+        boolean active = pending(inventory, module);
+        if (active && !recipe.getInternalName().equals(module.getRecipeName())) return null;
+        if (!tanksCompatible(tile, module.inputTanks, recipe.inputFluid, false)
+                || (!active && !tanksCanBeRetypedWithoutLoss(module.outputTanks, recipe.outputFluid))) return null;
+        MachineInputPlan plan = planInputs(tile, inventory, module.inputSlots, recipe.inputItem,
+                module.inputTanks, recipe.inputFluid, inputs);
+        if (plan == null) return null;
+        int count = recipe.inputFluid == null ? 0 : recipe.inputFluid.length;
+        for (int i = 0; i < count; i++) {
+            FluidTank tank = module.inputTanks[i];
+            int capacity = tank.getMaxFill();
+            if (!active && module instanceof com.hbm.module.machine.ModuleMachineAssembler) {
+                // Mirror HBM's setupTanks, rejecting values whose native int multiplication overflows.
+                if (recipe.inputFluid[i].fill > Integer.MAX_VALUE / 2) return null;
+                capacity = Math.max(tank.getFill(), Math.max(recipe.inputFluid[i].fill * 2, 4000));
+            }
+            if (!plan.addFluid(tank, recipe.inputFluid[i], capacity)) return null;
+        }
+        if (!active && module instanceof com.hbm.module.machine.ModuleMachineAssembler
+                && recipe.outputFluid != null) {
+            for (com.hbm.inventory.FluidStack fluid : recipe.outputFluid) {
+                if (fluid.fill > Integer.MAX_VALUE / 2) return null;
+            }
+        }
+        return plan;
+    }
+
+    protected boolean commitModule(TileEntity tile, com.hbm.module.machine.ModuleMachineBase module,
+            GenericRecipe recipe, MachineInputPlan plan) {
+        if (plan == null) return false;
+        if (!pending((IInventory) tile, module)) {
+            module.setRecipe(recipe.getInternalName(), false);
+            module.setupTanks(recipe);
+        }
+        plan.commit();
+        AdapterDiagnostics.reset(tile);
+        return true;
+    }
 
     protected boolean isAutoSwitchStable(
             TileEntity tile,
@@ -40,12 +98,10 @@ abstract class AbstractHbmMachineDriver implements IHbmMachineDriver {
             }
             if (candidate.inputItem[0].matchesRecipe(switchInput, true)) {
                 if (AdapterDiagnostics.enabled()) {
-                    AdapterDiagnostics.report(
-                            tile,
-                            "recipe " + recipe.getInternalName() + " is ambiguous with " + candidate.getInternalName()
-                                    + " in auto-switch group '" + recipe.autoSwitchGroup
-                                    + "': both accept the first input, so the machine would switch away by itself."
-                                    + " This recipe cannot be automated through the adapter.");
+                    AdapterDiagnostics.report(tile, DiagnosticMessage.of(
+                            "auto_switch_ambiguous", "recipe %s is ambiguous with %s in auto-switch group '%s': both accept the first input, so "
+                            + "the machine would switch away by itself. This recipe cannot be automated through the "
+                            + "adapter.", recipe.getInternalName(), candidate.getInternalName(), recipe.autoSwitchGroup));
                 }
                 return false;
             }
@@ -77,9 +133,8 @@ abstract class AbstractHbmMachineDriver implements IHbmMachineDriver {
         if (fluids == null) {
             if (hasFluids(tanks)) {
                 if (report) {
-                    AdapterDiagnostics.report(
-                            tile,
-                            "recipe needs no input fluid but an input tank still holds some. Drain the input tank(s).");
+                    AdapterDiagnostics.report(tile, DiagnosticMessage.of(
+                            "tank_not_empty", "recipe needs no input fluid but an input tank still holds some. Drain the input tank(s)."));
                 }
                 return false;
             }
@@ -87,10 +142,8 @@ abstract class AbstractHbmMachineDriver implements IHbmMachineDriver {
         }
         if (fluids.length > tanks.length) {
             if (report) {
-                AdapterDiagnostics.report(
-                        tile,
-                        "recipe needs " + fluids.length + " input fluids but this machine has only " + tanks.length
-                                + " input tanks");
+                AdapterDiagnostics.report(tile, DiagnosticMessage.of(
+                        "fluid_slots_short", "recipe needs %s input fluids but this machine has only %s input tanks", fluids.length, tanks.length));
             }
             return false;
         }
@@ -101,14 +154,10 @@ abstract class AbstractHbmMachineDriver implements IHbmMachineDriver {
             if (index >= fluids.length || fluids[index].pressure != 0
                     || tanks[index].getTankType() != fluids[index].type) {
                 if (report && AdapterDiagnostics.enabled()) {
-                    AdapterDiagnostics.report(
-                            tile,
-                            "input tank " + index + " holds " + tanks[index].getFill() + " of "
-                                    + (tanks[index].getTankType() == null ? "?"
-                                            : tanks[index].getTankType().getName())
-                                    + ", which this recipe cannot use (it wants ["
-                                    + AdapterDiagnostics.describeHbmFluids(fluids)
-                                    + "], matched tank-by-tank in order). Drain that tank.");
+                    AdapterDiagnostics.report(tile, DiagnosticMessage.of(
+                            "tank_incompatible", "input tank %s holds %s of %s, which this recipe cannot use (it wants [%s], matched tank-by-"
+                            + "tank in order). Drain that tank.", index, tanks[index].getFill(), (tanks[index].getTankType() == null ? "?"
+                                            : tanks[index].getTankType().getName()), AdapterDiagnostics.describeHbmFluids(fluids)));
                 }
                 return false;
             }
@@ -127,10 +176,8 @@ abstract class AbstractHbmMachineDriver implements IHbmMachineDriver {
      * changed but nothing is being fed". Everything checked here is a pure comparison against the
      * pattern plus a read of the item slots, neither of which those two calls affect.
      *
-     * <p>Fluids are deliberately not staged here: {@code setupTanks} can retype and resize the input
-     * tanks, so their capacity is only known afterwards. Add them with {@link #commitInputs} once the
-     * machine has been set up. For item-only recipes that step adds nothing, so those pushes are
-     * fully validated before any mutation.
+     * <p>Module callers use {@link #planModule} to stage fluids against projected tank capacity
+     * before setup. Native recipe-selection machines use {@link #commitInputs} with fixed tanks.
      */
     protected MachineInputPlan planInputs(
             TileEntity tile,
@@ -143,57 +190,47 @@ abstract class AbstractHbmMachineDriver implements IHbmMachineDriver {
         List<ItemStack> assignedItems = PatternMatcher.assign(expectedItems, suppliedInputs.getItems());
         if (assignedItems == null) {
             if (AdapterDiagnostics.enabled()) {
-                AdapterDiagnostics.report(
-                        tile,
-                        "input items do not match the recipe: recipe wants ["
-                                + AdapterDiagnostics.describeIngredients(expectedItems) + "], AE2 supplied ["
-                                + AdapterDiagnostics.describeItems(suppliedInputs.getItems())
-                                + "]. Turn off substitution on the pattern (AE2 may hand over an ore-dict stand-in"
-                                + " the HBM recipe rejects) and check the pattern amounts equal the recipe exactly.");
+                AdapterDiagnostics.report(tile, DiagnosticMessage.of(
+                        "item_mismatch", "input items do not match the recipe: recipe wants [%s], AE2 supplied [%s]. Turn off "
+                        + "substitution on the pattern (AE2 may hand over an ore-dict stand-in the HBM recipe rejects) "
+                        + "and check the pattern amounts equal the recipe exactly.", AdapterDiagnostics.describeIngredients(expectedItems), AdapterDiagnostics.describeItems(suppliedInputs.getItems())));
             }
             return null;
         }
         if (assignedItems.size() > inputSlots.length) {
-            AdapterDiagnostics.report(
-                    tile,
-                    "recipe needs " + assignedItems.size() + " distinct item inputs but this machine has only "
-                            + inputSlots.length + " input slots");
+            AdapterDiagnostics.report(tile, DiagnosticMessage.of(
+                    "item_slots_short", "recipe needs %s distinct item inputs but this machine has only %s input slots", assignedItems.size(), inputSlots.length));
             return null;
         }
         if (!PatternMatcher.matchesHbmFluids(expectedFluids, suppliedInputs.getFluids())) {
             if (AdapterDiagnostics.enabled()) {
-                AdapterDiagnostics.report(
-                        tile,
-                        "input fluids do not match the recipe: recipe wants ["
-                                + AdapterDiagnostics.describeHbmFluids(expectedFluids) + "], AE2 supplied ["
-                                + AdapterDiagnostics.describeFluids(suppliedInputs.getFluids())
-                                + "]. Pressurised recipe fluids are never accepted, and the ME fluid must be the"
-                                + " Forge mirror this mod registers for that HBM fluid.");
+                AdapterDiagnostics.report(tile, DiagnosticMessage.of(
+                        "fluid_mismatch", "input fluids do not match the recipe: recipe wants [%s], AE2 supplied [%s]. Pressurised "
+                        + "recipe fluids are never accepted, and the ME fluid must be the Forge mirror this mod "
+                        + "registers for that HBM fluid.", AdapterDiagnostics.describeHbmFluids(expectedFluids), AdapterDiagnostics.describeFluids(suppliedInputs.getFluids())));
             }
             return null;
         }
 
         int fluidCount = expectedFluids == null ? 0 : expectedFluids.length;
         if (fluidCount > inputTanks.length) {
-            AdapterDiagnostics.report(
-                    tile,
-                    "recipe needs " + fluidCount + " input fluids but this machine has only " + inputTanks.length
-                            + " input tanks");
+            AdapterDiagnostics.report(tile, DiagnosticMessage.of(
+                    "fluid_slots_short", "recipe needs %s input fluids but this machine has only %s input tanks", fluidCount, inputTanks.length));
             return null;
         }
 
         MachineInputPlan plan = new MachineInputPlan(inventory);
+        // Unused slots must not contain another recipe's leftovers.
+        for (int index = assignedItems.size(); index < inputSlots.length; index++) {
+            if (inventory.getStackInSlot(inputSlots[index]) != null) return null;
+        }
         for (int index = 0; index < assignedItems.size(); index++) {
             ItemStack addition = assignedItems.get(index);
             if (!plan.addItem(inputSlots[index], addition)) {
                 if (AdapterDiagnostics.enabled()) {
-                    AdapterDiagnostics.report(
-                            tile,
-                            "cannot place " + AdapterDiagnostics.describeItems(Collections.singletonList(addition))
-                                    + " into input slot " + inputSlots[index]
-                                    + ": the slot holds an incompatible item, or the amount exceeds the stack limit"
-                                    + " (machine limit " + inventory.getInventoryStackLimit() + ", item limit "
-                                    + addition.getMaxStackSize() + ")");
+                    AdapterDiagnostics.report(tile, DiagnosticMessage.of(
+                            "item_slot_rejected", "cannot place %s into input slot %s: the slot holds an incompatible item, or the amount "
+                            + "exceeds the stack limit (machine limit %s, item limit %s)", AdapterDiagnostics.describeItems(Collections.singletonList(addition)), inputSlots[index], inventory.getInventoryStackLimit(), addition.getMaxStackSize()));
                 }
                 return null;
             }
@@ -238,17 +275,13 @@ abstract class AbstractHbmMachineDriver implements IHbmMachineDriver {
             if (!plan.addFluid(inputTanks[index], expectedFluids[index])) {
                 if (AdapterDiagnostics.enabled()) {
                     FluidTank tank = inputTanks[index];
-                    AdapterDiagnostics.report(
-                            tile,
-                            "cannot fill input tank " + index + " with ["
-                                    + AdapterDiagnostics.describeHbmFluids(
-                                            new com.hbm.inventory.FluidStack[] { expectedFluids[index] })
-                                    + "]: tank holds "
-                                    + (tank == null ? "?"
+                    AdapterDiagnostics.report(tile, DiagnosticMessage.of(
+                            "tank_fill_failed", "cannot fill input tank %s with [%s]: tank holds %s. Drain leftover fluid of another type, or"
+                            + " the batch exceeds tank capacity.", index, AdapterDiagnostics.describeHbmFluids(
+                                            new com.hbm.inventory.FluidStack[] { expectedFluids[index] }), (tank == null ? "?"
                                             : tank.getFill() + "/" + tank.getMaxFill() + " of "
                                                     + (tank.getTankType() == null ? "?"
-                                                            : tank.getTankType().getName()))
-                                    + ". Drain leftover fluid of another type, or the batch exceeds tank capacity.");
+                                                            : tank.getTankType().getName()))));
                 }
                 return false;
             }
