@@ -2,18 +2,80 @@ package io.github.hbmcompat.machine;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Supplier;
 
 import net.minecraft.item.ItemStack;
 import net.minecraftforge.fluids.FluidStack;
 
 import com.hbm.inventory.RecipesCommon.AStack;
 import com.hbm.inventory.recipes.loader.GenericRecipe;
+import com.hbm.inventory.recipes.loader.GenericRecipes.ChanceOutput;
+import com.hbm.inventory.recipes.loader.GenericRecipes.ChanceOutputMulti;
+import com.hbm.inventory.recipes.loader.GenericRecipes.IOutput;
+
+import appeng.api.networking.crafting.ICraftingPatternDetails;
 
 import io.github.hbmcompat.fluid.HbmForgeFluidRegistry;
 
 final class PatternMatcher {
 
     private PatternMatcher() {}
+
+    static GenericRecipe selectRecipe(Iterable<? extends GenericRecipe> recipes, ICraftingPatternDetails details) {
+        return selectRecipe(recipes, PatternStacks.inputs(details), () -> PatternStacks.outputs(details));
+    }
+
+    /** Preserve custom outputs for unique inputs; consult outputs only to resolve a collision. */
+    static GenericRecipe selectRecipe(Iterable<? extends GenericRecipe> recipes, PatternStacks inputs,
+            Supplier<PatternStacks> outputs) {
+        List<GenericRecipe> candidates = new ArrayList<GenericRecipe>();
+        for (GenericRecipe recipe : recipes) {
+            if (matchesInputs(recipe, inputs)) candidates.add(recipe);
+        }
+        if (candidates.isEmpty()) return null;
+        if (candidates.size() == 1) return candidates.get(0);
+
+        PatternStacks expectedOutputs = outputs.get();
+        GenericRecipe found = null;
+        for (GenericRecipe recipe : candidates) {
+            if (matchesOutputs(recipe, expectedOutputs)) {
+                if (found != null) return null;
+                found = recipe;
+            }
+        }
+        return found;
+    }
+
+    static boolean matchesOutputs(GenericRecipe recipe, PatternStacks outputs) {
+        if (!outputs.isValid()) return false;
+        List<ItemStack> pool = copyItems(outputs.getItems());
+        if (recipe.outputItem != null) {
+            for (IOutput output : recipe.outputItem) {
+                // Never roll random outputs while deciding which recipe to run.
+                if (output instanceof ChanceOutputMulti) {
+                    List<ChanceOutput> choices = ((ChanceOutputMulti) output).pool;
+                    if (choices.size() != 1) return false;
+                    output = choices.get(0);
+                }
+                if (output == null || output.possibleMultiOutput()
+                        || (output instanceof ChanceOutput && !(((ChanceOutput) output).chance >= 1F))) {
+                    return false;
+                }
+                ItemStack produced = output.getSingle();
+                if (produced == null || produced.getItem() == null || produced.stackSize <= 0) return false;
+                int remaining = produced.stackSize;
+                for (ItemStack candidate : pool) {
+                    if (candidate.isItemEqual(produced) && ItemStack.areItemStackTagsEqual(candidate, produced)) {
+                        int consumed = Math.min(remaining, candidate.stackSize);
+                        candidate.stackSize -= consumed;
+                        remaining -= consumed;
+                    }
+                }
+                if (remaining != 0) return false;
+            }
+        }
+        return isEmpty(pool) && matchesHbmFluids(recipe.outputFluid, outputs.getFluids());
+    }
 
     static boolean matchesInputs(GenericRecipe recipe, PatternStacks inputs) {
         if (recipe == null || !inputs.isValid()) {

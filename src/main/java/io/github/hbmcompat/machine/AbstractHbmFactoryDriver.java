@@ -26,17 +26,7 @@ abstract class AbstractHbmFactoryDriver extends AbstractHbmMachineDriver {
 
     @Override
     public final HbmRecipeMatch match(ICraftingPatternDetails details) {
-        PatternStacks inputs = PatternStacks.inputs(details);
-        if (!inputs.isValid()) return null;
-        GenericRecipe found = null;
-        for (GenericRecipe recipe : getRecipeSet().recipeOrderedList) {
-            if (PatternMatcher.matchesInputs(recipe, inputs)) {
-                if (found != null) {
-                    return null;
-                }
-                found = recipe;
-            }
-        }
+        GenericRecipe found = PatternMatcher.selectRecipe(getRecipeSet().recipeOrderedList, details);
         return found == null ? null : new HbmRecipeMatch(this, found, found.getInternalName());
     }
 

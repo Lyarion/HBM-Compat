@@ -29,17 +29,7 @@ public final class AssemblyMachineDriver extends AbstractHbmMachineDriver {
 
     @Override
     public HbmRecipeMatch match(ICraftingPatternDetails details) {
-        PatternStacks inputs = PatternStacks.inputs(details);
-        if (!inputs.isValid()) return null;
-        GenericRecipe found = null;
-        for (GenericRecipe recipe : AssemblyMachineRecipes.INSTANCE.recipeOrderedList) {
-            if (PatternMatcher.matchesInputs(recipe, inputs)) {
-                if (found != null) {
-                    return null;
-                }
-                found = recipe;
-            }
-        }
+        GenericRecipe found = PatternMatcher.selectRecipe(AssemblyMachineRecipes.INSTANCE.recipeOrderedList, details);
         return found == null ? null : new HbmRecipeMatch(this, found, found.getInternalName());
     }
 
