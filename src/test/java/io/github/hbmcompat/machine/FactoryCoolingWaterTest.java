@@ -15,6 +15,48 @@ import static org.junit.Assert.*;
 public class FactoryCoolingWaterTest {
 
     @Test
+    public void assemblyFactoryExposesSpentSteamToImportBus() {
+        TileEntityMachineAssemblyFactory tile = new TileEntityMachineAssemblyFactory();
+        checkSpentSteam(tile, tile.water, tile.lps, tile.outputTanks);
+    }
+
+    @Test
+    public void chemicalFactoryExposesSpentSteamToImportBus() {
+        TileEntityMachineChemicalFactory tile = new TileEntityMachineChemicalFactory();
+        checkSpentSteam(tile, tile.water, tile.lps, tile.outputTanks);
+    }
+
+    private void checkSpentSteam(TileEntity tile, FluidTank water, FluidTank steam, FluidTank[] recipeOutputs) {
+        IHbmMachineDriver driver = HbmMachineDrivers.forTile(tile);
+        FluidTank[] sources = HbmFluidAccess.sourceTanks(tile);
+        assertEquals(recipeOutputs.length + 1, sources.length);
+        assertArrayEquals(recipeOutputs, Arrays.copyOf(sources, recipeOutputs.length));
+        assertSame(steam, sources[recipeOutputs.length]);
+        assertSame(Fluids.SPENTSTEAM, steam.getTankType());
+        assertEquals(0, steam.getPressure());
+        assertFalse(Arrays.asList(sources).contains(water));
+        assertFalse(Arrays.asList(HbmFluidAccess.sinkTanks(tile)).contains(steam));
+
+        // Empty steam tanks must keep polling so later cooling output can be imported.
+        assertEquals(0, steam.getFill());
+        assertTrue(HbmFluidAccess.canEverSource(tile));
+        steam.setFill(steam.getMaxFill());
+        water.setFill(1000);
+        FluidTank source = HbmFluidAccess.sourceTanks(tile)[recipeOutputs.length];
+        source.setFill(source.getFill() - 100);
+        assertEquals(steam.getMaxFill() - 100, steam.getFill());
+        assertEquals(1000, water.getFill());
+        assertArrayEquals(recipeOutputs, driver.getOutputTanks(tile));
+        assertFalse(driver.isBusy(tile));
+        for (FluidTank tank : recipeOutputs) {
+            assertEquals(0, tank.getFill());
+            assertSame(Fluids.NONE, tank.getTankType());
+        }
+        source.setFill(0);
+        assertTrue(HbmFluidAccess.canEverSource(tile));
+    }
+
+    @Test
     public void assemblyFactoryExposesCoolingWaterToExportBus() {
         TileEntityMachineAssemblyFactory tile = new TileEntityMachineAssemblyFactory();
         checkCoolingWater(tile, tile.water, tile.lps, tile.inputTanks);

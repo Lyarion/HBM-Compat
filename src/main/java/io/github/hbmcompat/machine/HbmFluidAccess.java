@@ -19,7 +19,7 @@ import api.hbm.fluidmk2.IFluidStandardSenderMK2;
  * <li>The six recipe-selection machines, via their {@link IHbmMachineDriver}
  * (input tanks = {@link IHbmMachineDriver#getInputTanks}, output tanks =
  * {@link IHbmMachineDriver#getOutputTanks}). The driver is always checked first,
- * with factory cooling water added for export buses only.</li>
+ * with factory cooling water added for export buses and spent steam for import buses.</li>
  * <li>Any HBM fluid <em>storage</em> block (Fluid Tank, Big-Ass Tank, BAT-9000,
  * Barrel, UF6/PuF6 tanks, drums, ...). These do not have a driver; instead they
  * implement HBM's generic {@code api.hbm.fluidmk2} interfaces. We key off the
@@ -63,7 +63,8 @@ public final class HbmFluidAccess {
     private HbmFluidAccess() {}
 
     /**
-     * Tanks a bus may import <em>from</em> (tank &rarr; ME): machine output tanks,
+     * Tanks a bus may import <em>from</em> (tank &rarr; ME): machine output tanks
+     * including factory spent steam,
      * or a storage tile's sending tanks.
      */
     public static FluidTank[] sourceTanks(TileEntity tile) {
@@ -73,7 +74,19 @@ public final class HbmFluidAccess {
         IHbmMachineDriver driver = HbmMachineDrivers.forTile(tile);
         if (driver != null) {
             FluidTank[] tanks = driver.getOutputTanks(tile);
-            return tanks == null ? EMPTY : tanks;
+            if (tanks == null) tanks = EMPTY;
+            // The cooling circuit produces steam outside the recipe lanes. Expose
+            // its actual tank to buses without treating it as a recipe output.
+            FluidTank steam = null;
+            if (tile instanceof TileEntityMachineAssemblyFactory) {
+                steam = ((TileEntityMachineAssemblyFactory) tile).lps;
+            } else if (tile instanceof TileEntityMachineChemicalFactory) {
+                steam = ((TileEntityMachineChemicalFactory) tile).lps;
+            }
+            if (steam == null) return tanks;
+            FluidTank[] sources = Arrays.copyOf(tanks, tanks.length + 1);
+            sources[tanks.length] = steam;
+            return sources;
         }
         if (tile instanceof IFluidStandardSenderMK2) {
             FluidTank[] tanks = ((IFluidStandardSenderMK2) tile).getSendingTanks();
@@ -132,7 +145,7 @@ public final class HbmFluidAccess {
      * comment for why.
      *
      * <p>For a driven machine the tank layout is a fixed property of the machine
-     * type, so the driver's array length is already the structural answer: an arc
+     * type, including the factory cooling circuit, so the array length is the structural answer: an arc
      * welder or soldering station has no output tank and never will, and sleeping
      * next to one is correct. For an undriven MK2 storage tile the arrays are
      * mode-dependent, so the structural answer is merely "does it implement the
@@ -144,8 +157,7 @@ public final class HbmFluidAccess {
         }
         IHbmMachineDriver driver = HbmMachineDrivers.forTile(tile);
         if (driver != null) {
-            FluidTank[] tanks = driver.getOutputTanks(tile);
-            return tanks != null && tanks.length > 0;
+            return sourceTanks(tile).length > 0;
         }
         return tile instanceof IFluidStandardSenderMK2;
     }
