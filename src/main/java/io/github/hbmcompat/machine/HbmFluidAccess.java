@@ -16,7 +16,7 @@ import api.hbm.fluidmk2.IFluidStandardSenderMK2;
  * kinds of target we support:
  *
  * <ol>
- * <li>The six recipe-selection machines, via their {@link IHbmMachineDriver}
+ * <li>Supported processing machines, via their {@link IHbmMachineDriver}
  * (input tanks = {@link IHbmMachineDriver#getInputTanks}, output tanks =
  * {@link IHbmMachineDriver#getOutputTanks}). The driver is always checked first,
  * with factory cooling water added for export buses and spent steam for import buses.</li>

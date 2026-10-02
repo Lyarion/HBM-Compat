@@ -17,7 +17,8 @@ public final class HbmMachineDrivers {
             new ChemicalFactoryDriver(),
             new ArcWelderDriver(),
             new SolderingStationDriver(),
-            new CrystallizerDriver()));
+            new CrystallizerDriver(),
+            new MixerDriver()));
 
     private HbmMachineDrivers() {}
 

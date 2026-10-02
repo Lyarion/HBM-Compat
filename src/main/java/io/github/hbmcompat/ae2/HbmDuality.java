@@ -228,9 +228,9 @@ public final class HbmDuality extends DualityInterface {
             if (match == null) {
                 if (diagnose) {
                     rejection = DiagnosticMessage.of(
-                            "recipe_unmatched", "no unique HBM recipe matches this pattern's inputs on the %s. Input types and amounts must "
-                            + "match exactly; pressurised fluids are unsupported. For assembly and chemical recipes with identical inputs,"
-                            + " pattern outputs must uniquely match one candidate.", driver.getMachineId());
+                            "recipe_unmatched", "no unique HBM recipe matches this pattern on the %s. Inputs must match exactly; "
+                            + "pressurised fluids are unsupported. Mixer patterns must also declare the exact fluid output and amount. "
+                            + "For assembly and chemical recipes with identical inputs, outputs must select one candidate.", driver.getMachineId());
                 }
                 continue;
             }
