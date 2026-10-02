@@ -7,6 +7,7 @@ import net.minecraft.tileentity.TileEntity;
 
 import com.hbm.inventory.RecipesCommon.AStack;
 import com.hbm.inventory.fluid.FluidType;
+import com.hbm.inventory.fluid.Fluids;
 import com.hbm.inventory.fluid.tank.FluidTank;
 import com.hbm.inventory.recipes.MixerRecipes;
 import com.hbm.inventory.recipes.MixerRecipes.MixerRecipe;
@@ -155,6 +156,11 @@ public final class MixerDriver extends AbstractHbmMachineDriver {
         // Every failure gate is above this point. HBM's setTankType clears fluid on type change.
         output.setTankType(selected.output);
         machine.recipeIndex = selected.index;
+        // Mirror canProcess() now: an empty tank left typed for the previous recipe is
+        // otherwise still a valid export-bus sink until the mixer's next tile tick.
+        for (int index = 0; index < tanks.length; index++) {
+            if (selected.fluidForTank(index) == null) tanks[index].setTankType(Fluids.NONE);
+        }
         plan.commit();
         AdapterDiagnostics.reset(tile);
         return true;

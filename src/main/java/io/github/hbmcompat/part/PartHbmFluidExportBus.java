@@ -12,6 +12,7 @@ import com.glodblock.github.common.parts.PartFluidExportBus;
 import com.hbm.inventory.fluid.FluidType;
 import com.hbm.inventory.fluid.Fluids;
 import com.hbm.inventory.fluid.tank.FluidTank;
+import com.hbm.tileentity.machine.TileEntityChimneyBase;
 
 import appeng.api.config.Actionable;
 import appeng.api.config.SchedulingMode;
@@ -70,7 +71,14 @@ public final class PartHbmFluidExportBus extends PartFluidExportBus {
 
         TileEntity target = getHbmTarget();
         FluidTank[] sinks = HbmFluidAccess.sinkTanks(target);
-        if (sinks.length == 0) {
+        boolean chimney = ChimneyFluidSink.supports(target);
+        TileEntity host = getHost().getTile();
+        if (chimney && !ChimneyFluidSink.isPort(target, host.xCoord, host.yCoord, host.zCoord, getSide())) {
+            diag.report(self, DiagnosticMessage.of(
+                    "chimney_port", "attach the export bus to the center of a smokestack base side"));
+            return TickRateModulation.SLOWER;
+        }
+        if (sinks.length == 0 && !chimney) {
             // Keep polling rather than sleeping: a SLEEP here can trap the device asleep
             // until an external wake (neighbour/redstone change), which HBM tanks never fire.
             // Note this guards only the ticking path -- the sleep gate in isSleeping() reaches
@@ -110,17 +118,19 @@ public final class PartHbmFluidExportBus extends PartFluidExportBus {
                 }
 
                 FluidTank tank = findTank(sinks, hbmFluid);
-                if (tank == null) {
+                if (tank == null && !chimney) {
                     lastSkip = DiagnosticMessage.of(
                             "tank_unconfigured", "no input tank already set to %s (tank full, untyped, typed for another fluid, or "
                             + "pressurized); the bus never changes a tank's fluid type, so set it via the machine's recipe "
                             + "or the tank's own GUI first", hbmFluid.getName());
                     continue;
                 }
-                int free = tank.getMaxFill() - tank.getFill();
-                int requestedAmount = (int) Math.min(remainingBudget, (long) free);
+                int requestedAmount = chimney
+                        ? (int) ChimneyFluidSink.limit(target, hbmFluid, getSide(), remainingBudget)
+                        : (int) Math.min(remainingBudget, (long) tank.getMaxFill() - tank.getFill());
                 if (requestedAmount <= 0) {
-                    lastSkip = DiagnosticMessage.of(
+                    lastSkip = chimney ? DiagnosticMessage.of(
+                            "chimney_fluid", "smokestacks accept only smoke, leaded smoke and poisonous smoke") : DiagnosticMessage.of(
                             "tank_full", "input tank for %s is full", hbmFluid.getName());
                     continue;
                 }
@@ -135,16 +145,23 @@ public final class PartHbmFluidExportBus extends PartFluidExportBus {
                 }
 
                 int inserted = (int) extracted.getStackSize();
-                // Fill only. We never write the tank type: findTank has already guaranteed the
-                // tank is typed for exactly this fluid, so there is nothing to set.
-                tank.setFill(tank.getFill() + inserted);
+                if (chimney) {
+                    // HBM's two smokestacks accept the entire amount of every smoke type
+                    // validated above (transferFluid returns zero). Calling the receiver
+                    // preserves its pollution reduction and ash/soot collection behavior.
+                    ((TileEntityChimneyBase) target).transferFluid(hbmFluid, 0, inserted);
+                } else {
+                    // Fill only: findTank guarantees the type already matches.
+                    tank.setFill(tank.getFill() + inserted);
+                }
                 remainingBudget -= inserted;
                 moved = true;
             }
             slotScheduler.finishTick(schedulingMode, inspectedSlots, slotCount);
 
             if (moved) {
-                diag.report(self, DiagnosticMessage.of(
+                diag.report(self, chimney ? DiagnosticMessage.of(
+                        "chimney_success", "OK: exporting smoke to smokestack") : DiagnosticMessage.of(
                         "export_success", "OK: exporting fluid into machine input tank"));
                 target.markDirty();
                 return TickRateModulation.FASTER;
@@ -184,7 +201,7 @@ public final class PartHbmFluidExportBus extends PartFluidExportBus {
     @Override
     protected Object getTarget() {
         TileEntity target = getHbmTarget();
-        return HbmFluidAccess.canEverSink(target) ? target : null;
+        return HbmFluidAccess.canEverSink(target) || ChimneyFluidSink.supports(target) ? target : null;
     }
 
     // getTarget() above breaks an assumption the base class makes about itself: PartBaseExportBus

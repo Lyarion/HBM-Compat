@@ -197,6 +197,25 @@ public class MixerDriverTest {
         assertEquals(250, machine.tanks[1].getFill());
     }
 
+    @Test public void clearsUnusedTankTypeBeforeBusCanFillOldRecipeFluid() throws Exception {
+        machine.tanks[2].setTankType(OUT);
+        machine.recipeIndex = 0;
+        machine.tanks[0].setTankType(A);
+        machine.tanks[1].setTankType(B);
+        // A completed two-fluid batch leaves empty tanks typed for its former inputs.
+        PatternStacks inputs = secondInputs();
+        HbmRecipeMatch match = driver.matchStacks(inputs, output(FORGE_OUT, 800));
+        assertNotNull(match);
+        assertTrue(push(match, inputs, FeedingMode.SINGLE_BATCH));
+        assertEquals(1, machine.recipeIndex);
+        assertSame(A, machine.tanks[0].getTankType());
+        assertEquals(500, machine.tanks[0].getFill());
+        assertSame(Fluids.NONE, machine.tanks[1].getTankType());
+        assertEquals(0, machine.tanks[1].getFill());
+        // The bus sees the live tank array immediately after this push, before HBM's update.
+        assertSame(Fluids.NONE, HbmFluidAccess.sinkTanks(machine)[1].getTankType());
+    }
+
     @Test public void neverClearsOutputFluidOrOverridesIdentifier() throws Exception {
         HbmRecipeMatch match = firstMatch();
         machine.tanks[2].setTankType(OTHER);

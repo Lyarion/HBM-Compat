@@ -13,6 +13,7 @@ import com.hbm.inventory.RecipesCommon.AStack;
 import io.github.hbmcompat.HbmCompat;
 import io.github.hbmcompat.debug.DiagnosticMessage;
 import io.github.hbmcompat.debug.DebugChat;
+import io.github.hbmcompat.debug.DebugFilter;
 
 /**
  * Per-adapter push diagnostics. {@link io.github.hbmcompat.ae2.HbmDuality#pushPattern} and the
@@ -36,7 +37,7 @@ public final class AdapterDiagnostics {
 
     /** True when the debug flag is on. Guard expensive reason-string building with this. */
     public static boolean enabled() {
-        return HbmCompat.DEBUG_ADAPTER || DebugChat.SUBSCRIPTIONS.active();
+        return HbmCompat.DEBUG_ADAPTER || DebugChat.SUBSCRIPTIONS.active(DebugFilter.ADAPTER);
     }
 
     /**

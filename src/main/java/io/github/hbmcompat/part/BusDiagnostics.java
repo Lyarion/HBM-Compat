@@ -5,6 +5,7 @@ import net.minecraft.tileentity.TileEntity;
 import io.github.hbmcompat.HbmCompat;
 import io.github.hbmcompat.debug.DiagnosticMessage;
 import io.github.hbmcompat.debug.DebugChat;
+import io.github.hbmcompat.debug.DebugFilter;
 
 /**
  * Per-gate fluid-bus diagnostics. Each bus instance holds one of these and calls
@@ -24,7 +25,7 @@ public final class BusDiagnostics {
     }
 
     public static boolean enabled() {
-        return HbmCompat.DEBUG_BUS || DebugChat.SUBSCRIPTIONS.active();
+        return HbmCompat.DEBUG_BUS || DebugChat.SUBSCRIPTIONS.active(DebugFilter.BUS);
     }
 
     /**

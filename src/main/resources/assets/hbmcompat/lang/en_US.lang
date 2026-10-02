@@ -22,7 +22,7 @@ item.auto_extract_card.name=Auto Extraction Card
 hbmcompat.auto_extract.description=Returns all machine item and fluid outputs to the ME network.
 hbmcompat.auto_extract.limit=ME-HBM Processing Adapter upgrade (maximum 1).
 
-hbmcompat.command.usage=Usage: /hbmc debug
+hbmcompat.command.usage=Usage: /hbmc debug [all|bus|adapter|off]
 hbmcompat.command.player_only=This command can only be used by a player.
 hbmcompat.debug.enabled=[HBMC] Debug mode enabled.
 hbmcompat.debug.disabled=[HBMC] Debug mode disabled.
@@ -72,3 +72,12 @@ hbmcompat.debug.line=[HBMC debug] [%s dim=%s @ %s] %s
 hbmcompat.debug.source.push=Adapter
 hbmcompat.debug.source.bus:fluid-import=Fluid import bus
 hbmcompat.debug.source.bus:export=Fluid export bus
+
+hbmcompat.debug.enabled_filter=[HBMC] Debug enabled. Filter: %s.
+hbmcompat.debug.filter.all=All
+hbmcompat.debug.filter.bus=Buses
+hbmcompat.debug.filter.adapter=Adapters
+
+hbmcompat.debug.reason.chimney_port=attach the export bus to the center of a smokestack base side
+hbmcompat.debug.reason.chimney_fluid=smokestacks accept only smoke, leaded smoke and poisonous smoke
+hbmcompat.debug.reason.chimney_success=OK: exporting smoke to smokestack

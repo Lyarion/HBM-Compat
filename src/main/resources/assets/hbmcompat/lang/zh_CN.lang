@@ -22,7 +22,7 @@ item.auto_extract_card.name=自动提取卡
 hbmcompat.auto_extract.description=自动将机器的全部物品和流体产物回收到 ME 网络。
 hbmcompat.auto_extract.limit=安装于 ME-HBM 样板适配器升级槽，最多 1 张。
 
-hbmcompat.command.usage=用法：/hbmc debug
+hbmcompat.command.usage=用法：/hbmc debug [all|bus|adapter|off]
 hbmcompat.command.player_only=此命令只能由玩家执行。
 hbmcompat.debug.enabled=[HBMC] 调试模式已开启。
 hbmcompat.debug.disabled=[HBMC] 调试模式已关闭。
@@ -72,3 +72,12 @@ hbmcompat.debug.line=[HBMC 调试] [%s 维度=%s 坐标=%s] %s
 hbmcompat.debug.source.push=样板适配器
 hbmcompat.debug.source.bus:fluid-import=流体输入总线
 hbmcompat.debug.source.bus:export=流体输出总线
+
+hbmcompat.debug.enabled_filter=[HBMC] 调试模式已开启，筛选：%s。
+hbmcompat.debug.filter.all=全部
+hbmcompat.debug.filter.bus=总线
+hbmcompat.debug.filter.adapter=适配器
+
+hbmcompat.debug.reason.chimney_port=请将输出总线贴在烟囱底座四侧的中间接口上。
+hbmcompat.debug.reason.chimney_fluid=烟囱只接收烟雾、含铅烟雾和有毒烟雾。
+hbmcompat.debug.reason.chimney_success=传输正常：正在向烟囱导出烟雾。
